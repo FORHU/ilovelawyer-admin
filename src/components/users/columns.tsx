@@ -3,10 +3,11 @@
 import { type ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown } from "lucide-react"
 
-import { type AdminUser } from "@/lib/mock-users"
+import { type AdminUserRow } from "@/lib/users/queries"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { UserApprovalActions } from "@/components/users/user-approval-actions"
 
 function initials(name: string | null, username: string): string {
   const source = name ?? username
@@ -42,7 +43,7 @@ function sortableHeader(label: string) {
   }
 }
 
-export const columns: ColumnDef<AdminUser>[] = [
+export const columns: ColumnDef<AdminUserRow>[] = [
   {
     accessorKey: "name",
     header: sortableHeader("Name"),
@@ -95,6 +96,36 @@ export const columns: ColumnDef<AdminUser>[] = [
       ),
   },
   {
+    accessorKey: "approvalStatus",
+    header: "Approval",
+    cell: ({ row }) => {
+      const status = row.original.approvalStatus
+      if (status === "ACTIVE")
+        return (
+          <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
+            Active
+          </Badge>
+        )
+      if (status === "DENIED")
+        return (
+          <Badge variant="outline" className="border-destructive/40 text-destructive">
+            Denied
+          </Badge>
+        )
+      if (status === "BLOCKED")
+        return (
+          <Badge variant="outline" className="border-slate-500/40 text-slate-600 dark:text-slate-400">
+            Blocked
+          </Badge>
+        )
+      return (
+        <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400">
+          Pending
+        </Badge>
+      )
+    },
+  },
+  {
     accessorKey: "createdAt",
     header: sortableHeader("Joined"),
     cell: ({ row }) => formatDate(row.original.createdAt),
@@ -103,5 +134,10 @@ export const columns: ColumnDef<AdminUser>[] = [
     accessorKey: "lastLoginAt",
     header: sortableHeader("Last login"),
     cell: ({ row }) => formatDate(row.original.lastLoginAt),
+  },
+  {
+    id: "actions",
+    header: "Actions",
+    cell: ({ row }) => <UserApprovalActions user={row.original} />,
   },
 ]
