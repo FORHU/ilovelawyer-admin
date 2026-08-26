@@ -24,10 +24,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/dashboard">)
   const [hydrating, setHydrating] = useState(() => !accessToken)
 
   useEffect(() => {
-    if (accessToken) {
-      setHydrating(false)
-      return
-    }
+    if (accessToken) return
     refreshAccessToken()
       .then(() => setHydrating(false))
       .catch(() => {

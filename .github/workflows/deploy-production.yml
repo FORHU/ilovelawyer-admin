@@ -1,0 +1,142 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or SHA to deploy"
+        required: true
+        default: main
+
+concurrency:
+  group: ilovelawyer-admin-deploy-production
+  cancel-in-progress: true
+
+env:
+  ECR_REPOSITORY: ilovelawyer-admin
+  AWS_REGION: ap-southeast-1
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Lint, Build, Push & Deploy (production)
+    runs-on: ubuntu-24.04-arm
+    environment: production
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Get ECR auth token
+        id: ecr-token
+        run: |
+          echo "password=$(aws ecr get-login-password --region ${{ env.AWS_REGION }})" >> $GITHUB_OUTPUT
+
+      # NEXT_PUBLIC_* values are inlined into the client JS bundle at `next build` time,
+      # not read at container runtime. This file must exist before `docker build` runs,
+      # since the builder stage's `COPY . .` is what carries it into the image, and
+      # `next build` auto-loads .env.production once NODE_ENV=production.
+      - name: Write env file
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        run: |
+          cat > ${{ github.workspace }}/.env.production << EOF
+          NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+          EOF
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/arm64
+          provenance: false
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+
+      - name: Clean up stale env path on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            [ -d /home/ec2-user/ilovelawyer-admin/.env.production ] && rm -rf /home/ec2-user/ilovelawyer-admin/.env.production || true
+
+      - name: Copy env file to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: ".env.production"
+          target: "/home/ec2-user/ilovelawyer-admin"
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          ECR_PASSWORD: ${{ steps.ecr-token.outputs.password }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          DEPLOY_IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 20m
+          envs: ECR_PASSWORD,ECR_REGISTRY,DEPLOY_IMAGE_TAG
+          script: |
+            set -e
+            echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+            docker pull --platform linux/arm64 "$ECR_REGISTRY/ilovelawyer-admin:$DEPLOY_IMAGE_TAG"
+
+            docker stop ilovelawyer-admin 2>/dev/null || true
+            docker rm   ilovelawyer-admin 2>/dev/null || true
+            docker run -d --name ilovelawyer-admin --restart unless-stopped \
+              --platform linux/arm64 \
+              -p 127.0.0.1:3000:3000 \
+              --env-file /home/ec2-user/ilovelawyer-admin/.env.production \
+              "$ECR_REGISTRY/ilovelawyer-admin:$DEPLOY_IMAGE_TAG"
+            docker image prune -f

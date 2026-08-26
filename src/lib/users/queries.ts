@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "@/lib/fetch"
+import { useAuthStore } from "@/lib/store/auth.store"
 
 // State machine (see ilovelawyer-api's schema.prisma ApprovalStatus comment):
 //   PENDING  --approve-->    ACTIVE
@@ -25,9 +26,13 @@ export interface AdminUserRow {
 const usersQueryKey = ["admin", "users"] as const
 
 export function useAdminUsersQuery() {
+  const accessToken = useAuthStore((s) => s.accessToken)
   return useQuery({
     queryKey: usersQueryKey,
     queryFn: () => apiFetch<AdminUserRow[]>("/api/admin/users"),
+    // Defends against firing before DashboardLayout's own silent-refresh has populated
+    // the access token — mirrors ilovelawyer-app's useCurrentUserQuery gate.
+    enabled: !!accessToken,
   })
 }
 

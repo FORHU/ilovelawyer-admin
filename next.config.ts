@@ -6,6 +6,7 @@ import { AUTH_PATHS } from "./src/lib/api-version";
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   async rewrites() {
     return AUTH_PATHS.map((source) => ({ source, destination: `${API_URL}${source}` }));
   },

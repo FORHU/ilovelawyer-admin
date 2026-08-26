@@ -42,6 +42,9 @@ async function attemptRefresh(): Promise<void> {
     await refreshAccessToken()
   } catch (err) {
     useAuthStore.getState().clearAuth()
+    // Hard navigation (not router.push) is deliberate: this runs outside any component,
+    // and a full reload guarantees in-memory auth/query state is wiped, not just the store.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     if (typeof window !== "undefined") window.location.href = "/login"
     throw err
   }
