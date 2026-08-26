@@ -37,6 +37,9 @@ export function DataTable<TData, TValue>({
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
 
+  // TanStack Table's returned functions are intentionally unstable across renders;
+  // React Compiler can't memoize this safely and flags it, but that's expected here.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,
