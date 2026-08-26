@@ -1,0 +1,68 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ilovelawyer-admin-deploy-production
+  cancel-in-progress: true
+
+env:
+  DEPLOY_PATH: /home/ec2-user/ilovelawyer-admin
+  PORT: 3000
+
+jobs:
+  deploy:
+    name: Deploy (production)
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      # NEXT_PUBLIC_* values get baked into the client JS bundle at `next build` time, not
+      # read at runtime — so .env must land on the box BEFORE the build step below, not after.
+      - name: Write env file
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        run: |
+          cat > ${{ github.workspace }}/.env.production << EOF
+          NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+          EOF
+
+      - name: Copy env file to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: .env.production
+          target: ${{ env.DEPLOY_PATH }}
+
+      - name: Deploy on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
+          APP_PORT: ${{ env.PORT }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 15m
+          envs: DEPLOY_PATH,APP_PORT
+          script: |
+            set -e
+            cd "$DEPLOY_PATH"
+            mv .env.production .env
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            pnpm install --frozen-lockfile
+            pnpm build
+
+            # Idempotent: restarts the process if pm2 already knows about it (any deploy
+            # after the first), otherwise starts it fresh (this deploy, the very first one).
+            pm2 restart ilovelawyer-admin --update-env \
+              || PORT=$APP_PORT pm2 start pnpm --name ilovelawyer-admin -- start
+            pm2 save
