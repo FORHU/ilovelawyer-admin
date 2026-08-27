@@ -71,6 +71,11 @@ export const columns: ColumnDef<AdminUserRow>[] = [
     header: sortableHeader("Email"),
   },
   {
+    accessorKey: "tenant",
+    header: "Tenant",
+    cell: ({ row }) => row.original.tenant?.name ?? "—",
+  },
+  {
     accessorKey: "role",
     header: "Role",
     cell: ({ row }) => {

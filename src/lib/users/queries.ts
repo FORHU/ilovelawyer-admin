@@ -16,6 +16,7 @@ export interface AdminUserRow {
   username: string
   email: string
   role: "USER" | "ADMIN"
+  tenant: { name: string } | null
   provider: string | null
   isEmailVerified: boolean
   approvalStatus: ApprovalStatus
