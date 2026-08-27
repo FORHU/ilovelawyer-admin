@@ -19,12 +19,14 @@ function initials(name: string | null, username: string): string {
     .join("")
 }
 
-function formatDate(iso: string | null): string {
+function formatDateTime(iso: string | null): string {
   if (!iso) return "—"
-  return new Date(iso).toLocaleDateString("en-US", {
+  return new Date(iso).toLocaleString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   })
 }
 
@@ -128,12 +130,12 @@ export const columns: ColumnDef<AdminUserRow>[] = [
   {
     accessorKey: "createdAt",
     header: sortableHeader("Joined"),
-    cell: ({ row }) => formatDate(row.original.createdAt),
+    cell: ({ row }) => formatDateTime(row.original.createdAt),
   },
   {
     accessorKey: "lastLoginAt",
     header: sortableHeader("Last login"),
-    cell: ({ row }) => formatDate(row.original.lastLoginAt),
+    cell: ({ row }) => formatDateTime(row.original.lastLoginAt),
   },
   {
     id: "actions",
