@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "@/lib/fetch"
 import { useAuthStore } from "@/lib/store/auth.store"
 
@@ -16,6 +16,7 @@ export interface AdminUserRow {
   username: string
   email: string
   role: "USER" | "ADMIN"
+  tenant: { name: string } | null
   provider: string | null
   isEmailVerified: boolean
   approvalStatus: ApprovalStatus
@@ -23,16 +24,52 @@ export interface AdminUserRow {
   lastLoginAt: string | null
 }
 
-const usersQueryKey = ["admin", "users"] as const
+export type AdminUsersSortBy = "name" | "email" | "createdAt" | "lastLoginAt"
+export type SortDir = "asc" | "desc"
 
-export function useAdminUsersQuery() {
+export interface AdminUsersQueryParams {
+  page: number
+  limit: number
+  sortBy: AdminUsersSortBy
+  sortDir: SortDir
+  q?: string
+}
+
+export interface AdminUsersPage {
+  data: AdminUserRow[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
+// Mutations invalidate this ["admin", "users"] prefix, which matches every params
+// variant below it — no need to enumerate pages/sorts/searches when busting the cache.
+const usersQueryKey = (params: AdminUsersQueryParams) => ["admin", "users", params] as const
+
+function buildUsersQueryString(params: AdminUsersQueryParams): string {
+  const search = new URLSearchParams({
+    page: String(params.page),
+    limit: String(params.limit),
+    sortBy: params.sortBy,
+    sortDir: params.sortDir,
+  })
+  if (params.q) search.set("q", params.q)
+  return search.toString()
+}
+
+export function useAdminUsersQuery(params: AdminUsersQueryParams) {
   const accessToken = useAuthStore((s) => s.accessToken)
   return useQuery({
-    queryKey: usersQueryKey,
-    queryFn: () => apiFetch<AdminUserRow[]>("/api/admin/users"),
+    queryKey: usersQueryKey(params),
+    queryFn: () => apiFetch<AdminUsersPage>(`/api/admin/users?${buildUsersQueryString(params)}`),
     // Defends against firing before DashboardLayout's own silent-refresh has populated
     // the access token — mirrors ilovelawyer-app's useCurrentUserQuery gate.
     enabled: !!accessToken,
+    staleTime: 30 * 1000,
+    // Keeps the current page's rows on screen while the next page/sort/search loads,
+    // instead of flashing the loading state on every pagination click.
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -40,7 +77,7 @@ function useUserTransitionMutation(action: "approve" | "reactivate" | "block" | 
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (userId: string) => apiFetch(`/api/admin/users/${userId}/${action}`, { method: "POST" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: usersQueryKey }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),
   })
 }
 
@@ -57,6 +94,6 @@ export function useDenyUserMutation() {
         method: "POST",
         body: JSON.stringify({ reason }),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: usersQueryKey }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),
   })
 }
