@@ -176,7 +176,7 @@ jobs:
         run: |
           set -uo pipefail
           for i in $(seq 1 12); do
-            CODE=$(curl -s -o /dev/null -m 10 -w '%{http_code}' https://uk-admin.ilovelawyer.com/ || echo 000)
+            CODE=$(curl -sL -o /dev/null -m 10 -w '%{http_code}' https://uk-admin.ilovelawyer.com/ || echo 000)
             echo "attempt $i: $CODE"
             [ "$CODE" = "200" ] && exit 0
             sleep 10
