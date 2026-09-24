@@ -1,0 +1,185 @@
+name: Deploy UK
+
+# FORHU/ilovelawyer-admin → the London stack (eu-west-2), port 3000.
+#
+# Modelled on deploy-uk-app.yml. Two things that matter:
+#   * NEXT_PUBLIC_* is baked in at build time, so the UK needs its OWN image
+#     pointing at the UK API. Tagged uk-<sha>, leaving Singapore's :latest and
+#     :<sha> untouched.
+#   * Native arm64 build — the UK host is Graviton. Singapore's existing admin
+#     image is x86 and will NOT run there.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or SHA to deploy"
+        required: true
+        default: main
+
+concurrency:
+  group: ilovelawyer-uk-deploy        # shared with api and app: one deploy at a time
+  cancel-in-progress: false
+
+env:
+  ECR_REPOSITORY: ilovelawyer-admin
+  ECR_REGION: ap-southeast-1          # where the images live
+  AWS_REGION: eu-west-2               # where the UK stack runs
+  ACCOUNT_ID: "617163942417"
+  INSTANCE_ID: i-0c21e7d8c1aae968c
+  APP_DIR: /opt/ilovelawyer
+  ENV_PARAM: /ilovelawyer-uk/admin-env
+  NODE_ENV: production
+  PORT: "3000"
+
+jobs:
+  deploy:
+    name: Build, Push & Deploy (UK)
+    # Native arm64 — matches Graviton EC2. Do not build linux/arm64 via QEMU on
+    # ubuntu-latest; next build under emulation looks stuck and can take hours.
+    runs-on: ubuntu-24.04-arm
+    environment: production
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_UK_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          echo "tag=uk-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "registry=${{ env.ACCOUNT_ID }}.dkr.ecr.${{ env.ECR_REGION }}.amazonaws.com" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region "${{ env.ECR_REGION }}" \
+            | docker login --username AWS --password-stdin "${{ steps.tag.outputs.registry }}"
+
+      # CHECK THIS PATH against the admin repo's Dockerfile before the first run.
+      # If the repo is not a monorepo, this is likely `.env.staging` at the root
+      # rather than `apps/admin/.env.staging`. Wrong path = the build silently
+      # produces an image with no API URL baked in.
+      - name: Write admin env file
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.UK_NEXT_PUBLIC_API_URL }}
+        run: |
+          cat > ${{ github.workspace }}/.env.staging << EOF
+          NODE_ENV=${{ env.NODE_ENV }}
+          NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+          EOF
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/arm64
+          provenance: false
+          tags: ${{ steps.tag.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}
+
+      - name: Store env file in Parameter Store
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.UK_NEXT_PUBLIC_API_URL }}
+        run: |
+          set -euo pipefail
+          umask 077
+          cat > env.tmp << EOF
+          NODE_ENV=${{ env.NODE_ENV }}
+          PORT=${{ env.PORT }}
+          NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+          EOF
+
+          aws ssm put-parameter \
+            --name "${{ env.ENV_PARAM }}" \
+            --type SecureString --overwrite \
+            --value "file://env.tmp" \
+            --region "${{ env.AWS_REGION }}" > /dev/null
+
+          rm -f env.tmp
+
+      - name: Deploy via SSM
+        id: send
+        env:
+          REGISTRY: ${{ steps.tag.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${{ env.ECR_REPOSITORY }}:${TAG}"
+          ENVFILE="${{ env.APP_DIR }}/ilovelawyer-admin.env"
+
+          COMMANDS=(
+            "set -euo pipefail"
+            "mkdir -p ${{ env.APP_DIR }}"
+            "aws ssm get-parameter --name ${{ env.ENV_PARAM }} --with-decryption --region ${{ env.AWS_REGION }} --query Parameter.Value --output text > ${ENVFILE}"
+            "chmod 600 ${ENVFILE}"
+            "aws ecr get-login-password --region ${{ env.ECR_REGION }} | docker login --username AWS --password-stdin ${REGISTRY}"
+            "docker pull --platform linux/arm64 ${IMAGE}"
+            "docker rm -f ilovelawyer-admin 2>/dev/null || true"
+            "docker run -d --name ilovelawyer-admin --restart unless-stopped --platform linux/arm64 --env-file ${ENVFILE} -p 127.0.0.1:${{ env.PORT }}:${{ env.PORT }} ${IMAGE}"
+            "docker image prune -f"
+          )
+
+          PARAMS=$(printf '%s\n' "${COMMANDS[@]}" | jq -R . | jq -sc '{commands: .}')
+
+          CMD_ID=$(aws ssm send-command \
+            --region "${{ env.AWS_REGION }}" \
+            --instance-ids "${{ env.INSTANCE_ID }}" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy ilovelawyer-admin ${TAG}" \
+            --timeout-seconds 900 \
+            --parameters "${PARAMS}" \
+            --query Command.CommandId --output text)
+
+          echo "command_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+          echo "SSM command: $CMD_ID"
+
+      - name: Wait for the deploy
+        run: |
+          set -uo pipefail
+          STATUS=Pending
+          for i in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation \
+              --region "${{ env.AWS_REGION }}" \
+              --command-id "${{ steps.send.outputs.command_id }}" \
+              --instance-id "${{ env.INSTANCE_ID }}" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            echo "status: $STATUS"
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 10
+          done
+
+          aws ssm get-command-invocation \
+            --region "${{ env.AWS_REGION }}" \
+            --command-id "${{ steps.send.outputs.command_id }}" \
+            --instance-id "${{ env.INSTANCE_ID }}" \
+            --query '[StandardOutputContent,StandardErrorContent]' --output text
+
+          [ "$STATUS" = "Success" ] || { echo "::error::deploy $STATUS"; exit 1; }
+
+      - name: Smoke test
+        run: |
+          set -uo pipefail
+          for i in $(seq 1 12); do
+            CODE=$(curl -s -o /dev/null -m 10 -w '%{http_code}' https://uk-admin.ilovelawyer.com/ || echo 000)
+            echo "attempt $i: $CODE"
+            [ "$CODE" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "::error::uk-admin did not answer after the deploy"
+          exit 1
