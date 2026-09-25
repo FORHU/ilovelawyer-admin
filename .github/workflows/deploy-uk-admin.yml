@@ -75,7 +75,7 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: ${{ vars.UK_NEXT_PUBLIC_API_URL }}
         run: |
-          cat > ${{ github.workspace }}/.env.staging << EOF
+          cat > ${{ github.workspace }}/.env.production << EOF
           NODE_ENV=${{ env.NODE_ENV }}
           NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
           EOF
