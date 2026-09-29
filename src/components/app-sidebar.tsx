@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Loader2, LogOut, Users } from "lucide-react"
+import { Loader2, LogOut, Settings, Users } from "lucide-react"
 
 import {
   AlertDialog,
@@ -31,7 +31,10 @@ import {
 import { useLogoutMutation } from "@/lib/auth/mutations"
 import { useAuthStore } from "@/lib/store/auth.store"
 
-const navItems = [{ title: "Users", url: "/dashboard/users", icon: Users }]
+const navItems = [
+  { title: "Users", url: "/dashboard/users", icon: Users },
+  { title: "Settings", url: "/dashboard/settings", icon: Settings },
+]
 
 export function AppSidebar() {
   const pathname = usePathname()
