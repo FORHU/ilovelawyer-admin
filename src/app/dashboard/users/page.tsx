@@ -1,10 +1,12 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import type { OnChangeFn, SortingState } from "@tanstack/react-table"
 
 import { columns } from "@/components/users/columns"
 import { DataTable } from "@/components/data-table"
+import { useAdminSettingsQuery } from "@/lib/settings/queries"
 import { useAdminUsersQuery, type AdminUsersSortBy, type SortDir } from "@/lib/users/queries"
 
 const PAGE_SIZE = 20
@@ -44,6 +46,9 @@ export default function UsersPage() {
     q: debouncedSearch || undefined,
   })
 
+  const { data: settings } = useAdminSettingsQuery()
+  const autoApproveTenants = settings?.tenants.filter((t) => t.autoApproveSignups) ?? []
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -52,6 +57,15 @@ export default function UsersPage() {
           All registered users. Approve or deny a pending signup — the user is notified by email either way.
         </p>
       </div>
+      {autoApproveTenants.length > 0 && (
+        <p className="bg-muted text-muted-foreground rounded-md px-3 py-2 text-sm">
+          Auto-approve is on for {autoApproveTenants.map((t) => t.code).join(" and ")}. New signups there skip this
+          queue once their email is verified.{" "}
+          <Link href="/dashboard/settings" className="text-foreground underline underline-offset-2">
+            Change in Settings
+          </Link>
+        </p>
+      )}
       {isLoading && <p className="text-muted-foreground text-sm">Loading users…</p>}
       {isError && <p className="text-destructive text-sm">{(error as Error).message}</p>}
       {data && (
