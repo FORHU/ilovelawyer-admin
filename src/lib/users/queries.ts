@@ -86,6 +86,15 @@ export const useReactivateUserMutation = () => useUserTransitionMutation("reacti
 export const useBlockUserMutation = () => useUserTransitionMutation("block")
 export const useUnblockUserMutation = () => useUserTransitionMutation("unblock")
 
+// Admin bypass of the signup email code — not an approval transition, so no email is sent.
+export function useVerifyEmailMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: string) => apiFetch(`/api/admin/users/${userId}/verify-email`, { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),
+  })
+}
+
 export function useDenyUserMutation() {
   const queryClient = useQueryClient()
   return useMutation({

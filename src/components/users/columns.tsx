@@ -7,7 +7,7 @@ import { type AdminUserRow } from "@/lib/users/queries"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { UserApprovalActions } from "@/components/users/user-approval-actions"
+import { UnverifiedBadge, UserApprovalActions } from "@/components/users/user-approval-actions"
 
 function initials(name: string | null, username: string): string {
   const source = name ?? username
@@ -97,9 +97,7 @@ export const columns: ColumnDef<AdminUserRow>[] = [
           Verified
         </Badge>
       ) : (
-        <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400">
-          Unverified
-        </Badge>
+        <UnverifiedBadge user={row.original} />
       ),
   },
   {
