@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { type ReactElement, useEffect, useRef, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { badgeVariants } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -27,6 +28,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
 import {
   type AdminUserRow,
   useApproveUserMutation,
@@ -34,6 +36,7 @@ import {
   useDenyUserMutation,
   useReactivateUserMutation,
   useUnblockUserMutation,
+  useVerifyEmailMutation,
 } from "@/lib/users/queries"
 
 interface ConfirmActionButtonProps {
@@ -45,6 +48,8 @@ interface ConfirmActionButtonProps {
   variant?: "default" | "outline" | "destructive"
   onConfirm: () => void
   isPending: boolean
+  /** Element the dialog opens from — defaults to a small Button showing `label`. */
+  trigger?: ReactElement
 }
 
 function ConfirmActionButton({
@@ -56,6 +61,7 @@ function ConfirmActionButton({
   variant = "default",
   onConfirm,
   isPending,
+  trigger,
 }: ConfirmActionButtonProps) {
   const [open, setOpen] = useState(false)
   // AlertDialogAction here is a plain Button (see alert-dialog.tsx), not a
@@ -70,7 +76,7 @@ function ConfirmActionButton({
 
   return (
     <AlertDialog open={open} onOpenChange={(next) => !isPending && setOpen(next)}>
-      <AlertDialogTrigger render={<Button variant={variant === "default" ? "default" : "outline"} size="sm" />}>
+      <AlertDialogTrigger render={trigger ?? <Button variant={variant === "default" ? "default" : "outline"} size="sm" />}>
         {label}
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -185,6 +191,39 @@ export function UserApprovalActions({ user }: { user: AdminUserRow }) {
       description={`They'll be notified by email at ${user.email} and can access the app again.`}
       onConfirm={() => withToast(unblockMutation, "unblocked")}
       isPending={unblockMutation.isPending}
+    />
+  )
+}
+
+/** The Verified column's amber "Unverified" badge, clickable to mark the email verified. */
+export function UnverifiedBadge({ user }: { user: AdminUserRow }) {
+  const verifyMutation = useVerifyEmailMutation()
+  const displayName = user.name ?? user.username
+
+  return (
+    <ConfirmActionButton
+      label="Unverified"
+      confirmLabel="Mark verified"
+      pendingLabel="Verifying…"
+      title={`Mark ${displayName}'s email as verified?`}
+      description={`${user.email} will be treated as verified, so they can sign in without entering the emailed code.`}
+      trigger={
+        <button
+          type="button"
+          title="Click to mark as verified"
+          className={cn(
+            badgeVariants({ variant: "outline" }),
+            "cursor-pointer border-amber-500/40 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+          )}
+        />
+      }
+      onConfirm={() =>
+        verifyMutation.mutate(user.id, {
+          onSuccess: () => toast.success(`${displayName}'s email marked as verified`),
+          onError: (err) => toast.error((err as Error).message),
+        })
+      }
+      isPending={verifyMutation.isPending}
     />
   )
 }
