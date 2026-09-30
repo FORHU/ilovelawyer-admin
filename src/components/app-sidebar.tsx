@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Loader2, LogOut, Settings, Users } from "lucide-react"
@@ -45,6 +46,9 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1.5">
+          {/* The dark mark's "iL" is white, so each theme gets its own file. */}
+          <Image src="/ilovelawyer-mark-light.png" alt="" width={24} height={24} className="size-6 shrink-0 dark:hidden" priority />
+          <Image src="/ilovelawyer-mark-dark.png" alt="" width={24} height={24} className="hidden size-6 shrink-0 dark:block" priority />
           <span
             className="text-lg tracking-[-0.4px]"
             style={{ fontFamily: "var(--font-libre-caslon-text), serif" }}
