@@ -1,4 +1,18 @@
-name: Deploy Production
+name: Lint, Build, Push & Deploy (production)
+
+# FORHU/ilovelawyer-admin → the Singapore host (ap-southeast-1).
+#
+# Rewritten to match deploy-uk-admin.yml. What changed and why:
+#   * OIDC instead of AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY. The old keys
+#     stopped working on 2026-08-28 and every run since has failed with
+#     "The security token included in the request is invalid".
+#   * SSM Run Command instead of appleboy/ssh-action + scp-action, so there is
+#     no EC2_SSH_KEY in this repo. The box already runs the SSM agent.
+#   * Deploys the exact tag it just built rather than :latest, so a rollback is
+#     a tag away and two deploys cannot race.
+#
+# The container holds no secrets — only NEXT_PUBLIC_API_URL and PORT — so
+# nothing travels through Parameter Store.
 
 on:
   push:
@@ -6,23 +20,31 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Branch, tag, or SHA to deploy"
+        description: "Branch, tag, or SHA to deploy (ignored on push)"
         required: true
         default: main
+      image_tag:
+        description: "Existing image tag to deploy. Leave blank to build from ref."
+        required: false
+        default: ""
 
 concurrency:
-  group: ilovelawyer-admin-deploy-production
-  cancel-in-progress: true
+  group: ilovelawyer-sg-admin-deploy
+  cancel-in-progress: false
 
 env:
   ECR_REPOSITORY: ilovelawyer-admin
   AWS_REGION: ap-southeast-1
-  IMAGE_TAG: ${{ github.sha }}
+  ACCOUNT_ID: "617163942417"
+  INSTANCE_ID: i-09ee0651b89dbdca5
+  CONTAINER: ilovelawyer-admin
+  NODE_ENV: production
+  PORT: "3000"
 
 jobs:
   deploy:
     name: Lint, Build, Push & Deploy (production)
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     environment: production
 
     permissions:
@@ -30,15 +52,16 @@ jobs:
       contents: read
 
     steps:
+      # On push there is no `ref` input, so fall back to the pushed commit.
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.sha }}
+          ref: ${{ github.event.inputs.ref || github.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.33.0
+          version: 10.33.4
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -58,28 +81,34 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY || secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Get ECR auth token
-        id: ecr-token
+      - name: Resolve image tag
+        id: tag
         run: |
-          echo "password=$(aws ecr get-login-password --region ${{ env.AWS_REGION }})" >> $GITHUB_OUTPUT
+          TAG="${{ github.event.inputs.image_tag }}"
+          [ -z "$TAG" ] && TAG="${{ github.sha }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "registry=${{ env.ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> "$GITHUB_OUTPUT"
+          echo "Deploying ${{ env.ECR_REPOSITORY }}:$TAG"
 
-      # NEXT_PUBLIC_* values are inlined into the client JS bundle at `next build` time,
-      # not read at container runtime. This file must exist before `docker build` runs,
-      # since the builder stage's `COPY . .` is what carries it into the image, and
-      # `next build` auto-loads .env.production once NODE_ENV=production.
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
+            | docker login --username AWS --password-stdin "${{ steps.tag.outputs.registry }}"
+
+      # NEXT_PUBLIC_* is inlined into the client bundle at `next build`, not read
+      # at container runtime, so this file must exist before `docker build`.
+      # Check the filename against the Dockerfile: Next.js loads .env.production
+      # for a production build, and ignores names like .env.staging.
       - name: Write env file
+        if: ${{ github.event_name == 'push' || github.event.inputs.image_tag == '' }}
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
         run: |
           cat > ${{ github.workspace }}/.env.production << EOF
+          NODE_ENV=${{ env.NODE_ENV }}
           NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
           EOF
 
@@ -87,57 +116,81 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push Docker image
+        if: ${{ github.event_name == 'push' || github.event.inputs.image_tag == '' }}
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
-          platforms: linux/arm64
           provenance: false
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          tags: ${{ steps.tag.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}
 
-      - name: Clean up stale env path on EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            [ -d /home/ec2-user/ilovelawyer-admin/.env.production ] && rm -rf /home/ec2-user/ilovelawyer-admin/.env.production || true
-
-      - name: Copy env file to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: ".env.production"
-          target: "/home/ec2-user/ilovelawyer-admin"
-
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy via SSM
+        id: send
         env:
-          ECR_PASSWORD: ${{ steps.ecr-token.outputs.password }}
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          DEPLOY_IMAGE_TAG: ${{ env.IMAGE_TAG }}
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 20m
-          envs: ECR_PASSWORD,ECR_REGISTRY,DEPLOY_IMAGE_TAG
-          script: |
-            set -e
-            echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-            docker pull --platform linux/arm64 "$ECR_REGISTRY/ilovelawyer-admin:$DEPLOY_IMAGE_TAG"
+          REGISTRY: ${{ steps.tag.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        run: |
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${{ env.ECR_REPOSITORY }}:${TAG}"
 
-            docker stop ilovelawyer-admin 2>/dev/null || true
-            docker rm   ilovelawyer-admin 2>/dev/null || true
-            docker run -d --name ilovelawyer-admin --restart unless-stopped \
-              --platform linux/arm64 \
-              -p 127.0.0.1:3000:3000 \
-              --env-file /home/ec2-user/ilovelawyer-admin/.env.production \
-              "$ECR_REGISTRY/ilovelawyer-admin:$DEPLOY_IMAGE_TAG"
-            docker image prune -f
+          COMMANDS=(
+            "set -euo pipefail"
+            "aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${REGISTRY}"
+            "docker pull ${IMAGE}"
+            "docker rm -f ${{ env.CONTAINER }} 2>/dev/null || true"
+            "docker run -d --name ${{ env.CONTAINER }} --restart unless-stopped -p 127.0.0.1:${{ env.PORT }}:${{ env.PORT }} -e NODE_ENV=${{ env.NODE_ENV }} -e PORT=${{ env.PORT }} -e NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} ${IMAGE}"
+            "docker image prune -f"
+          )
+
+          # jq builds the JSON, so a quote inside any command cannot break it.
+          PARAMS=$(printf '%s\n' "${COMMANDS[@]}" | jq -R . | jq -sc '{commands: .}')
+
+          CMD_ID=$(aws ssm send-command \
+            --region "${{ env.AWS_REGION }}" \
+            --instance-ids "${{ env.INSTANCE_ID }}" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy ${{ env.CONTAINER }} ${TAG}" \
+            --timeout-seconds 900 \
+            --parameters "${PARAMS}" \
+            --query Command.CommandId --output text)
+
+          echo "command_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+          echo "SSM command: $CMD_ID"
+
+      - name: Wait for the deploy
+        run: |
+          set -uo pipefail
+          STATUS=Pending
+          for i in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation \
+              --region "${{ env.AWS_REGION }}" \
+              --command-id "${{ steps.send.outputs.command_id }}" \
+              --instance-id "${{ env.INSTANCE_ID }}" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            echo "status: $STATUS"
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 10
+          done
+
+          aws ssm get-command-invocation \
+            --region "${{ env.AWS_REGION }}" \
+            --command-id "${{ steps.send.outputs.command_id }}" \
+            --instance-id "${{ env.INSTANCE_ID }}" \
+            --query '[StandardOutputContent,StandardErrorContent]' --output text
+
+          [ "$STATUS" = "Success" ] || { echo "::error::deploy $STATUS"; exit 1; }
+
+      - name: Smoke test
+        run: |
+          set -uo pipefail
+          for i in $(seq 1 12); do
+            # -L follows the app's redirect from / to /login, which is normal.
+            CODE=$(curl -sL -o /dev/null -m 10 -w '%{http_code}' https://admin.ilovelawyer.com/ || echo 000)
+            echo "attempt $i: $CODE"
+            [ "$CODE" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "::error::admin did not answer after the deploy"
+          exit 1
