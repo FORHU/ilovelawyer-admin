@@ -44,7 +44,7 @@ env:
 jobs:
   deploy:
     name: Lint, Build, Push & Deploy (production)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     environment: production
 
     permissions:
@@ -120,8 +120,10 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
+          platforms: linux/arm64
           provenance: false
           tags: ${{ steps.tag.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}
+
 
       - name: Deploy via SSM
         id: send
