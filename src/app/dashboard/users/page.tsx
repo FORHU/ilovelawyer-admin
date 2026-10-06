@@ -46,6 +46,10 @@ export default function UsersPage() {
     q: debouncedSearch || undefined,
   })
 
+  // Deleting the only row on the last page leaves `page` past the end — step back rather than
+  // show an empty table. Adjusting state during render (not in an effect) avoids an extra pass.
+  if (data && page > data.totalPages) setPage(data.totalPages)
+
   const { data: settings } = useAdminSettingsQuery()
   const autoApproveTenants = settings?.tenants.filter((t) => t.autoApproveSignups) ?? []
 
@@ -55,6 +59,7 @@ export default function UsersPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
         <p className="text-muted-foreground text-sm">
           All registered users. Approve or deny a pending signup — the user is notified by email either way.
+          Deleting a user permanently removes their account.
         </p>
       </div>
       {autoApproveTenants.length > 0 && (

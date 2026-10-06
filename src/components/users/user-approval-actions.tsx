@@ -1,6 +1,6 @@
 "use client"
 
-import { type ReactElement, useEffect, useRef, useState } from "react"
+import { type ReactElement, useEffect, useId, useRef, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -27,12 +27,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
   type AdminUserRow,
   useApproveUserMutation,
   useBlockUserMutation,
+  useDeleteUserMutation,
   useDenyUserMutation,
   useReactivateUserMutation,
   useUnblockUserMutation,
@@ -50,6 +53,9 @@ interface ConfirmActionButtonProps {
   isPending: boolean
   /** Element the dialog opens from — defaults to a small Button showing `label`. */
   trigger?: ReactElement
+  /** When set, the admin must type this text (case-insensitive) before the confirm button
+   * enables — a second safeguard for irreversible actions. */
+  confirmPhrase?: string
 }
 
 function ConfirmActionButton({
@@ -62,8 +68,12 @@ function ConfirmActionButton({
   onConfirm,
   isPending,
   trigger,
+  confirmPhrase,
 }: ConfirmActionButtonProps) {
   const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState("")
+  const phraseInputId = useId()
+  const phraseMatches = !confirmPhrase || typed.trim().toLowerCase() === confirmPhrase.toLowerCase()
   // AlertDialogAction here is a plain Button (see alert-dialog.tsx), not a
   // dialog-closing primitive — closing early would hide the pending state before
   // it ever renders. Instead, close once the mutation settles (isPending flips
@@ -75,7 +85,15 @@ function ConfirmActionButton({
   }, [isPending])
 
   return (
-    <AlertDialog open={open} onOpenChange={(next) => !isPending && setOpen(next)}>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (isPending) return
+        // Clear on every open so a half-typed phrase never carries over to the next attempt.
+        if (next) setTyped("")
+        setOpen(next)
+      }}
+    >
       <AlertDialogTrigger render={trigger ?? <Button variant={variant === "default" ? "default" : "outline"} size="sm" />}>
         {label}
       </AlertDialogTrigger>
@@ -84,12 +102,28 @@ function ConfirmActionButton({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
+        {confirmPhrase && (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={phraseInputId} className="block leading-normal font-normal select-text">
+              Type <span className="font-medium">{confirmPhrase}</span> to confirm
+            </Label>
+            <Input
+              id={phraseInputId}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={confirmPhrase}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={isPending}
+            />
+          </div>
+        )}
         <AlertDialogFooter>
           <AlertDialogCancel render={<Button variant="outline" disabled={isPending} />}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             render={<Button variant={variant === "destructive" ? "destructive" : "default"} />}
             onClick={onConfirm}
-            disabled={isPending}
+            disabled={isPending || !phraseMatches}
           >
             {isPending && <Loader2 className="size-3.5 animate-spin" />}
             {isPending ? pendingLabel : confirmLabel}
@@ -191,6 +225,34 @@ export function UserApprovalActions({ user }: { user: AdminUserRow }) {
       description={`They'll be notified by email at ${user.email} and can access the app again.`}
       onConfirm={() => withToast(unblockMutation, "unblocked")}
       isPending={unblockMutation.isPending}
+    />
+  )
+}
+
+/** Shown on every row regardless of approval status. The admin must type the user's email
+ * before Delete enables; it then deletes immediately — no grace period, no undo, and no email
+ * to the user. */
+export function DeleteUserAction({ user }: { user: AdminUserRow }) {
+  const deleteMutation = useDeleteUserMutation()
+  const displayName = user.name ?? user.username
+
+  return (
+    <ConfirmActionButton
+      label="Delete"
+      confirmLabel="Delete"
+      pendingLabel="Deleting…"
+      title={`Delete ${displayName}'s account?`}
+      description={`This permanently deletes ${user.email} and all of their data. This can't be undone.`}
+      variant="destructive"
+      trigger={<Button variant="destructive" size="sm" />}
+      confirmPhrase={user.email}
+      onConfirm={() =>
+        deleteMutation.mutate(user.id, {
+          onSuccess: () => toast.success(`${displayName}'s account was deleted`),
+          onError: (err) => toast.error((err as Error).message),
+        })
+      }
+      isPending={deleteMutation.isPending}
     />
   )
 }

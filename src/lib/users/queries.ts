@@ -106,3 +106,12 @@ export function useDenyUserMutation() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),
   })
 }
+
+// Immediate, permanent hard delete — no grace period and no undo.
+export function useDeleteUserMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: string) => apiFetch(`/api/admin/users/${userId}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),
+  })
+}
