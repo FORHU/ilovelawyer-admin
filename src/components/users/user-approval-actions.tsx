@@ -27,6 +27,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -37,6 +38,7 @@ import {
   useBlockUserMutation,
   useDeleteUserMutation,
   useDenyUserMutation,
+  useExportUserDataMutation,
   useReactivateUserMutation,
   useUnblockUserMutation,
   useVerifyEmailMutation,
@@ -254,6 +256,64 @@ export function DeleteUserAction({ user }: { user: AdminUserRow }) {
       }
       isPending={deleteMutation.isPending}
     />
+  )
+}
+
+/** Produces the person's data export on their behalf, for a request that came by email or from
+ * someone who can't sign in. The admin can't enter the person's password, so they confirm that
+ * they have checked who is asking. The API records the export under the admin's name. */
+export function ExportUserDataAction({ user }: { user: AdminUserRow }) {
+  const exportMutation = useExportUserDataMutation()
+  const [open, setOpen] = useState(false)
+  const [verified, setVerified] = useState(false)
+  const verifiedId = useId()
+  const displayName = user.name ?? user.username
+
+  function handleExport() {
+    exportMutation.mutate(user.id, {
+      onSuccess: () => {
+        toast.success(`${displayName}'s data export downloaded`)
+        setOpen(false)
+      },
+      onError: (err) => toast.error((err as Error).message),
+    })
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (exportMutation.isPending) return
+        // A tick from an earlier attempt must never carry over to the next person.
+        if (next) setVerified(false)
+        setOpen(next)
+      }}
+    >
+      <DialogTrigger render={<Button variant="outline" size="sm" />}>Export data</DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Export {displayName}&apos;s data</DialogTitle>
+          <DialogDescription>
+            Downloads the same zip the person can get from their own profile: a PDF summary, the complete record
+            and their uploaded files. Only do this for a request you have checked. It is recorded in the audit
+            trail under your name.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex items-start gap-3">
+          <Checkbox id={verifiedId} checked={verified} onCheckedChange={(next) => setVerified(next === true)} disabled={exportMutation.isPending} />
+          <Label htmlFor={verifiedId} className="block leading-normal font-normal select-text">
+            I have verified that the person asking for this is the owner of <span className="font-medium">{user.email}</span>.
+          </Label>
+        </div>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" disabled={exportMutation.isPending} />}>Cancel</DialogClose>
+          <Button onClick={handleExport} disabled={!verified || exportMutation.isPending}>
+            {exportMutation.isPending && <Loader2 className="size-3.5 animate-spin" />}
+            {exportMutation.isPending ? "Preparing…" : "Export data"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

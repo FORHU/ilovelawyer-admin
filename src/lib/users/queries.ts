@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { apiFetch } from "@/lib/fetch"
+import { apiFetch, apiFetchRaw } from "@/lib/fetch"
 import { useAuthStore } from "@/lib/store/auth.store"
 
 // State machine (see ilovelawyer-api's schema.prisma ApprovalStatus comment):
@@ -104,6 +104,34 @@ export function useDenyUserMutation() {
         body: JSON.stringify({ reason }),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),
+  })
+}
+
+// Downloads the same zip the person can download from their own profile (PDF summary, complete
+// record, uploaded files), produced on their behalf. The API requires the admin to confirm they
+// verified who is asking, records the export under the admin's name, and builds the file as it
+// streams, so a large account can take a while.
+export function useExportUserDataMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiFetchRaw(`/api/admin/users/${userId}/export`, {
+        method: "POST",
+        body: JSON.stringify({ identityVerified: true }),
+      })
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `ilovelawyer-user-data-${userId.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.zip`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      // Revoked on the next turn so the browser has already started reading the blob.
+      setTimeout(() => URL.revokeObjectURL(url), 0)
+    },
+    // The export is an audit event; refresh the audit trail page if it is open.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "audit-events"] }),
   })
 }
 

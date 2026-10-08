@@ -7,7 +7,7 @@ import { type AdminUserRow } from "@/lib/users/queries"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { DeleteUserAction, UnverifiedBadge, UserApprovalActions } from "@/components/users/user-approval-actions"
+import { DeleteUserAction, ExportUserDataAction, UnverifiedBadge, UserApprovalActions } from "@/components/users/user-approval-actions"
 
 function initials(name: string | null, username: string): string {
   const source = name ?? username
@@ -146,6 +146,7 @@ export const columns: ColumnDef<AdminUserRow>[] = [
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
         <UserApprovalActions user={row.original} />
+        <ExportUserDataAction user={row.original} />
         <DeleteUserAction user={row.original} />
       </div>
     ),
