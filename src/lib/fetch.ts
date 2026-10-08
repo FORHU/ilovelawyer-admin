@@ -65,6 +65,34 @@ async function throwIfNotOk(res: Response): Promise<void> {
   throw Object.assign(new Error(error.message ?? "Request failed"), { status: res.status })
 }
 
+/** Like apiFetch, but returns the raw Response instead of parsing JSON, for file downloads. */
+export async function apiFetchRaw(path: string, options?: FetchOptions): Promise<Response> {
+  const { skipAuthRefresh, ...fetchOptions } = options ?? {}
+  const url = resolveUrl(path)
+
+  const res = await fetch(url, {
+    ...fetchOptions,
+    credentials: "include",
+    headers: buildHeaders(fetchOptions.headers),
+  })
+
+  if (res.status === 401 && !skipAuthRefresh) {
+    await attemptRefresh()
+
+    const retry = await fetch(url, {
+      ...fetchOptions,
+      credentials: "include",
+      headers: buildHeaders(fetchOptions.headers),
+    })
+
+    await throwIfNotOk(retry)
+    return retry
+  }
+
+  await throwIfNotOk(res)
+  return res
+}
+
 export async function apiFetch<T>(path: string, options?: FetchOptions): Promise<T> {
   const { skipAuthRefresh, ...fetchOptions } = options ?? {}
   const url = resolveUrl(path)
