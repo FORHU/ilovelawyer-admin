@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Loader2, LogOut, Settings, Users } from "lucide-react"
+import { Loader2, LogOut, ScrollText, Settings, Users } from "lucide-react"
 
 import {
   AlertDialog,
@@ -34,6 +34,7 @@ import { useAuthStore } from "@/lib/store/auth.store"
 
 const navItems = [
   { title: "Users", url: "/dashboard/users", icon: Users },
+  { title: "Audit trail", url: "/dashboard/audit", icon: ScrollText },
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ]
 
