@@ -25,6 +25,8 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   searchPlaceholder?: string
+  /** What each row is, singular, for the "N users" count under the table. */
+  itemLabel?: string
   total: number
   isFetching?: boolean
   search: string
@@ -40,6 +42,7 @@ export function DataTable<TData, TValue>({
   columns,
   data,
   searchPlaceholder = "Search…",
+  itemLabel = "user",
   total,
   isFetching,
   search,
@@ -111,7 +114,7 @@ export function DataTable<TData, TValue>({
       </div>
       <div className="flex items-center justify-between">
         <div className="text-muted-foreground text-sm">
-          {total} user{total === 1 ? "" : "s"}
+          {total} {itemLabel}{total === 1 ? "" : "s"}
           {isFetching ? " · refreshing…" : ""}
         </div>
         <div className="flex items-center gap-2">
