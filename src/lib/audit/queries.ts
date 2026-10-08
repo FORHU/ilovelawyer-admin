@@ -20,8 +20,17 @@ export interface AuditEventsQueryParams {
   q?: string
 }
 
+// Names for the ids that appear in the events on this page. An id missing from a map belongs to
+// something that no longer exists (a deleted organization, account or case).
+export interface AuditResolvedReferences {
+  organizations: Record<string, string>
+  users: Record<string, { email: string; name: string | null }>
+  cases: Record<string, string>
+}
+
 export interface AuditEventsPage {
   data: AuditEventRow[]
+  resolved: AuditResolvedReferences
   total: number
   page: number
   limit: number

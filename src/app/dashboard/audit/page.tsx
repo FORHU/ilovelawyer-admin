@@ -3,7 +3,7 @@
 import * as React from "react"
 import type { OnChangeFn, SortingState } from "@tanstack/react-table"
 
-import { columns } from "@/components/audit/columns"
+import { makeColumns } from "@/components/audit/columns"
 import { DataTable } from "@/components/data-table"
 import { useAuditEventsQuery } from "@/lib/audit/queries"
 import type { SortDir } from "@/lib/users/queries"
@@ -39,6 +39,8 @@ export default function AuditTrailPage() {
     sortDir,
     q: debouncedSearch || undefined,
   })
+
+  const columns = React.useMemo(() => makeColumns(data?.resolved), [data?.resolved])
 
   return (
     <div className="flex flex-col gap-4">
