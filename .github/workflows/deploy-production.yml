@@ -39,7 +39,7 @@ env:
   INSTANCE_ID: i-09ee0651b89dbdca5
   CONTAINER: ilovelawyer-admin
   NODE_ENV: production
-  PORT: "3003"
+  PORT: "3000"
 
 jobs:
   deploy:

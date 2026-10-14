@@ -43,7 +43,7 @@ env:
   CONTAINER: ilovelawyer-admin
   NETWORK: forhu-dev
   HOST_PORT: "4032"
-  APP_PORT: "3003"
+  APP_PORT: "3000"
   ENV_PARAM: /forhu-dev/ilovelawyer-admin/env
   SHARED_ENV: /opt/forhu-dev/credentials/ilovelawyer.env
   MERGED_ENV: /opt/forhu-dev/ilovelawyer-admin.env
