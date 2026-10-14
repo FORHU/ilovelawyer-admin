@@ -1,6 +1,6 @@
 name: Deploy UK
 
-# FORHU/ilovelawyer-admin → the London stack (eu-west-2), port 3000.
+# FORHU/ilovelawyer-admin → the London stack (eu-west-2), port 3003.
 #
 # Modelled on deploy-uk-app.yml. Two things that matter:
 #   * NEXT_PUBLIC_* is baked in at build time, so the UK needs its OWN image
@@ -30,7 +30,7 @@ env:
   APP_DIR: /opt/ilovelawyer
   ENV_PARAM: /ilovelawyer-uk/admin-env
   NODE_ENV: production
-  PORT: "3000"
+  PORT: "3003"
 
 jobs:
   deploy:
