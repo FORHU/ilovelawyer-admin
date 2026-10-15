@@ -1,49 +1,58 @@
-name: Lint, Build, Push & Deploy (production)
+name: Deploy Production (dev host)
 
-# FORHU/ilovelawyer-admin → the Singapore host (ap-southeast-1).
+# ilovelawyer-admin production on the shared host.
 #
-# Rewritten to match deploy-uk-admin.yml. What changed and why:
-#   * OIDC instead of AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY. The old keys
-#     stopped working on 2026-08-28 and every run since has failed with
-#     "The security token included in the request is invalid".
-#   * SSM Run Command instead of appleboy/ssh-action + scp-action, so there is
-#     no EC2_SSH_KEY in this repo. The box already runs the SSM agent.
-#   * Deploys the exact tag it just built rather than :latest, so a rollback is
-#     a tag away and two deploys cannot race.
+# This one was already SSM-based, so the change is small and deliberate:
+#   - INSTANCE_ID moves from i-09ee0651b89dbdca5 to the shared host.
+#   - Container `ilovelawyer-prod-admin` on 4035. The dev admin already holds
+#     4032 on this host; reusing it would stop dev rather than fail.
+#   - Joins the forhu-dev network, as every other container there does.
+#   - The role becomes forhu-deploy, which is the only one permitted to send SSM
+#     commands to this instance.
+#   - The smoke test hits the container on the host rather than
+#     admin.ilovelawyer.com. Until DNS is cut over that hostname still answers
+#     from the OLD box, so the old test would pass while this deploy was broken.
 #
-# The container holds no secrets — only NEXT_PUBLIC_API_URL and PORT — so
-# nothing travels through Parameter Store.
+# Unchanged: lint, typecheck, the image_tag input for redeploying an existing
+# build, and .env.production written before `docker build` because NEXT_PUBLIC_*
+# is inlined at build time. Note the filename — Next.js loads .env.production for
+# a production build and ignores .env.staging, which is what the app repo uses.
+# The two differ on purpose; do not "align" them.
+#
+# The container holds no secrets, only NEXT_PUBLIC_API_URL and PORT, so nothing
+# travels through Parameter Store.
+#
+# Dispatch only while the old workflow still deploys on push to main.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
-        description: "Branch, tag, or SHA to deploy (ignored on push)"
-        required: true
-        default: main
+        description: "Branch, tag or SHA to deploy"
+        required: false
       image_tag:
         description: "Existing image tag to deploy. Leave blank to build from ref."
         required: false
         default: ""
 
 concurrency:
-  group: ilovelawyer-sg-admin-deploy
+  group: ilovelawyer-prod-admin-dev-host
   cancel-in-progress: false
 
 env:
-  ECR_REPOSITORY: ilovelawyer-admin
   AWS_REGION: ap-southeast-1
   ACCOUNT_ID: "617163942417"
-  INSTANCE_ID: i-09ee0651b89dbdca5
-  CONTAINER: ilovelawyer-admin
+  INSTANCE_ID: i-0f95a93145ea25e7a
+  ECR_REPOSITORY: ilovelawyer-admin
+  CONTAINER: ilovelawyer-prod-admin
+  NETWORK: forhu-dev
+  HOST_PORT: "4035"
+  APP_PORT: "3000"
   NODE_ENV: production
-  PORT: "3000"
 
 jobs:
   deploy:
-    name: Lint, Build, Push & Deploy (production)
+    name: Lint, build, push and deploy (ilovelawyer production admin)
     runs-on: ubuntu-24.04-arm
     environment: production
 
@@ -52,11 +61,10 @@ jobs:
       contents: read
 
     steps:
-      # On push there is no `ref` input, so fall back to the pushed commit.
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || github.sha }}
+          ref: ${{ github.event.inputs.ref || github.ref_name }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -79,14 +87,14 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_DEV_DEPLOY_ROLE_ARN || 'arn:aws:iam::617163942417:role/forhu-deploy' }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Resolve image tag
         id: tag
         run: |
           TAG="${{ github.event.inputs.image_tag }}"
-          [ -z "$TAG" ] && TAG="${{ github.sha }}"
+          [ -z "$TAG" ] && TAG="$(git rev-parse HEAD)"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "registry=${{ env.ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> "$GITHUB_OUTPUT"
           echo "Deploying ${{ env.ECR_REPOSITORY }}:$TAG"
@@ -96,25 +104,29 @@ jobs:
           aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
             | docker login --username AWS --password-stdin "${{ steps.tag.outputs.registry }}"
 
-      # NEXT_PUBLIC_* is inlined into the client bundle at `next build`, not read
-      # at container runtime, so this file must exist before `docker build`.
-      # Check the filename against the Dockerfile: Next.js loads .env.production
-      # for a production build, and ignores names like .env.staging.
+      # Must exist before docker build — NEXT_PUBLIC_* is inlined by `next build`,
+      # not read at runtime. .env.production, not .env.staging.
       - name: Write env file
-        if: ${{ github.event_name == 'push' || github.event.inputs.image_tag == '' }}
+        if: ${{ github.event.inputs.image_tag == '' }}
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
         run: |
-          cat > ${{ github.workspace }}/.env.production << EOF
+          set -euo pipefail
+          cat > "${{ github.workspace }}/.env.production" << EOF
           NODE_ENV=${{ env.NODE_ENV }}
           NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
           EOF
 
+          grep -q '^NEXT_PUBLIC_API_URL=.' .env.production || {
+            echo "::error::NEXT_PUBLIC_API_URL is empty — the bundle would ship with no API to call."
+            exit 1
+          }
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push Docker image
-        if: ${{ github.event_name == 'push' || github.event.inputs.image_tag == '' }}
+      - name: Build and push image
+        if: ${{ github.event.inputs.image_tag == '' }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -123,7 +135,6 @@ jobs:
           platforms: linux/arm64
           provenance: false
           tags: ${{ steps.tag.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}
-
 
       - name: Deploy via SSM
         id: send
@@ -138,9 +149,9 @@ jobs:
           COMMANDS=(
             "set -euo pipefail"
             "aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${REGISTRY}"
-            "docker pull ${IMAGE}"
+            "docker pull --platform linux/arm64 ${IMAGE}"
             "docker rm -f ${{ env.CONTAINER }} 2>/dev/null || true"
-            "docker run -d --name ${{ env.CONTAINER }} --restart unless-stopped -p 127.0.0.1:${{ env.PORT }}:${{ env.PORT }} -e NODE_ENV=${{ env.NODE_ENV }} -e PORT=${{ env.PORT }} -e NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} ${IMAGE}"
+            "docker run -d --name ${{ env.CONTAINER }} --restart unless-stopped --platform linux/arm64 --network ${{ env.NETWORK }} -p 127.0.0.1:${{ env.HOST_PORT }}:${{ env.APP_PORT }} -e NODE_ENV=${{ env.NODE_ENV }} -e PORT=${{ env.APP_PORT }} -e NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} ${IMAGE}"
             "docker image prune -f"
           )
 
@@ -182,15 +193,29 @@ jobs:
 
           [ "$STATUS" = "Success" ] || { echo "::error::deploy $STATUS"; exit 1; }
 
-      - name: Smoke test
+      # On the host, not admin.ilovelawyer.com — that still answers from the old
+      # box until DNS moves, so testing it would pass regardless of this deploy.
+      - name: Smoke test (host port)
         run: |
           set -uo pipefail
-          for i in $(seq 1 12); do
-            # -L follows the app's redirect from / to /login, which is normal.
-            CODE=$(curl -sL -o /dev/null -m 10 -w '%{http_code}' https://admin.ilovelawyer.com/ || echo 000)
-            echo "attempt $i: $CODE"
-            [ "$CODE" = "200" ] && exit 0
-            sleep 10
+          CMD_ID=$(aws ssm send-command \
+            --region "${{ env.AWS_REGION }}" \
+            --instance-ids "${{ env.INSTANCE_ID }}" \
+            --document-name AWS-RunShellScript \
+            --comment "smoke ${{ env.CONTAINER }}" \
+            --parameters commands='["for i in $(seq 1 12); do CODE=$(curl -sL -o /dev/null -m 10 -w %{http_code} http://127.0.0.1:'"${{ env.HOST_PORT }}"'/ || echo 000); echo attempt $i: $CODE; [ \"$CODE\" = \"200\" ] && exit 0; sleep 5; done; exit 1"]' \
+            --query Command.CommandId --output text)
+
+          for i in $(seq 1 30); do
+            STATUS=$(aws ssm get-command-invocation --region "${{ env.AWS_REGION }}" \
+              --command-id "$CMD_ID" --instance-id "${{ env.INSTANCE_ID }}" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 5
           done
-          echo "::error::admin did not answer after the deploy"
-          exit 1
+
+          aws ssm get-command-invocation --region "${{ env.AWS_REGION }}" \
+            --command-id "$CMD_ID" --instance-id "${{ env.INSTANCE_ID }}" \
+            --query '[StandardOutputContent,StandardErrorContent]' --output text
+
+          [ "$STATUS" = "Success" ] || { echo "::error::admin did not answer on ${{ env.HOST_PORT }}"; exit 1; }
