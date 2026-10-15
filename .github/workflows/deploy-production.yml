@@ -4,8 +4,8 @@ name: Deploy Production (dev host)
 #
 # This one was already SSM-based, so the change is small and deliberate:
 #   - INSTANCE_ID moves from i-09ee0651b89dbdca5 to the shared host.
-#   - Container `ilovelawyer-prod-admin` on 4035. The dev admin already holds
-#     4032 on this host; reusing it would stop dev rather than fail.
+#   - Container `ilovelawyer-admin` on 4035, matching Cloudflare: production is
+#     the plain name, dev is ilovelawyer-admin-dev on 4032.
 #   - Joins the forhu-dev network, as every other container there does.
 #   - The role becomes forhu-deploy, which is the only one permitted to send SSM
 #     commands to this instance.
@@ -44,7 +44,7 @@ env:
   ACCOUNT_ID: "617163942417"
   INSTANCE_ID: i-0f95a93145ea25e7a
   ECR_REPOSITORY: ilovelawyer-admin
-  CONTAINER: ilovelawyer-prod-admin
+  CONTAINER: ilovelawyer-admin
   NETWORK: forhu-dev
   HOST_PORT: "4035"
   APP_PORT: "3000"
