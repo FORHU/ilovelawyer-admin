@@ -5,7 +5,7 @@ export interface AdminAuthUser {
   username: string
   email: string
   name: string | null
-  role: "USER" | "ADMIN"
+  role: "USER" | "LAWYER" | "ADMIN"
 }
 
 interface AuthState {
