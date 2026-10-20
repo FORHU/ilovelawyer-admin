@@ -10,12 +10,16 @@ import { useAuthStore } from "@/lib/store/auth.store"
 //   BLOCKED  --unblock-->    ACTIVE
 export type ApprovalStatus = "PENDING" | "ACTIVE" | "DENIED" | "BLOCKED"
 
+// Which app an account belongs to: LAWYER = ilovelawyer-app, USER = the client app. The list never
+// includes ADMIN accounts.
+export type UserRole = "LAWYER" | "USER"
+
 export interface AdminUserRow {
   id: string
   name: string | null
   username: string
   email: string
-  role: "USER" | "ADMIN"
+  role: UserRole
   tenant: { name: string } | null
   provider: string | null
   isEmailVerified: boolean
@@ -33,6 +37,7 @@ export interface AdminUsersQueryParams {
   sortBy: AdminUsersSortBy
   sortDir: SortDir
   q?: string
+  role: UserRole
 }
 
 export interface AdminUsersPage {
@@ -53,6 +58,7 @@ function buildUsersQueryString(params: AdminUsersQueryParams): string {
     limit: String(params.limit),
     sortBy: params.sortBy,
     sortDir: params.sortDir,
+    role: params.role,
   })
   if (params.q) search.set("q", params.q)
   return search.toString()

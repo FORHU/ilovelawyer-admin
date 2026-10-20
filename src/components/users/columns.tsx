@@ -76,14 +76,6 @@ export const columns: ColumnDef<AdminUserRow>[] = [
     cell: ({ row }) => row.original.tenant?.name ?? "—",
   },
   {
-    accessorKey: "role",
-    header: "Role",
-    cell: ({ row }) => {
-      const role = row.original.role
-      return <Badge variant={role === "ADMIN" ? "default" : "secondary"}>{role}</Badge>
-    },
-  },
-  {
     accessorKey: "provider",
     header: "Sign-in",
     cell: ({ row }) => (row.original.provider === "google" ? "Google" : "Email"),
