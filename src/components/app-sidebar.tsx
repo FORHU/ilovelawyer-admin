@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Cpu, Loader2, LogOut, MessageSquareText, ScrollText, Settings, Users } from "lucide-react"
+import { Cpu, Loader2, LogOut, MessageSquareText, Scale, ScrollText, Settings, Users } from "lucide-react"
 
 import {
   AlertDialog,
@@ -33,7 +33,8 @@ import { useLogoutMutation } from "@/lib/auth/mutations"
 import { useAuthStore } from "@/lib/store/auth.store"
 
 const navItems = [
-  { title: "Users", url: "/dashboard/users", icon: Users },
+  { title: "Lawyers", url: "/dashboard/lawyers", icon: Scale },
+  { title: "Clients", url: "/dashboard/clients", icon: Users },
   { title: "Audit trail", url: "/dashboard/audit", icon: ScrollText },
   { title: "Feedback", url: "/dashboard/feedback", icon: MessageSquareText },
   { title: "LLM Usage", url: "/dashboard/llm-usage", icon: Cpu },
