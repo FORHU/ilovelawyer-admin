@@ -1,12 +1,14 @@
 "use client"
 
+import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown } from "lucide-react"
 
+import { clientBillingHref } from "@/components/billing/columns"
 import { type AdminUserRow } from "@/lib/users/queries"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { DeleteUserAction, ExportUserDataAction, UnverifiedBadge, UserApprovalActions } from "@/components/users/user-approval-actions"
 
 function initials(name: string | null, username: string): string {
@@ -146,6 +148,9 @@ export const columns: ColumnDef<AdminUserRow>[] = [
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
         <UserApprovalActions user={row.original} />
+        <Link href={clientBillingHref(row.original.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+          Billing
+        </Link>
         <ExportUserDataAction user={row.original} />
         <DeleteUserAction user={row.original} />
       </div>
