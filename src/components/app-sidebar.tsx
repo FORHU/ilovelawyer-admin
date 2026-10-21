@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Cpu, Loader2, LogOut, MessageSquareText, ScrollText, Settings, Users } from "lucide-react"
+import { Cpu, Loader2, LogOut, MessageSquareText, ScrollText, Settings, ShieldCheck, Users } from "lucide-react"
 
 import {
   AlertDialog,
@@ -34,6 +34,7 @@ import { useAuthStore } from "@/lib/store/auth.store"
 
 const navItems = [
   { title: "Users", url: "/dashboard/users", icon: Users },
+  { title: "Lawyer verifications", url: "/dashboard/lawyers", icon: ShieldCheck },
   { title: "Audit trail", url: "/dashboard/audit", icon: ScrollText },
   { title: "Feedback", url: "/dashboard/feedback", icon: MessageSquareText },
   { title: "LLM Usage", url: "/dashboard/llm-usage", icon: Cpu },
