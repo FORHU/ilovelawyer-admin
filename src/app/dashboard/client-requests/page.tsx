@@ -5,6 +5,7 @@ import type { OnChangeFn, SortingState } from "@tanstack/react-table"
 
 import { DataTable } from "@/components/data-table"
 import { clientRequestColumns } from "@/components/client-requests/columns"
+import { FeesSummary } from "@/components/client-requests/fees-summary"
 import { REQUEST_STATUS_LABELS } from "@/components/client-requests/format"
 import {
   CLIENT_REQUEST_STATUSES,
@@ -16,10 +17,15 @@ import {
 const PAGE_SIZE = 25
 const NO_SORTING: SortingState = []
 
+const VIEWS = [
+  { id: "requests", label: "Requests" },
+  { id: "fees", label: "Fees by firm or lawyer" },
+] as const
+
 const selectClass =
   "h-8 rounded-2xl border border-transparent bg-input/50 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
 
-export default function ClientRequestsPage() {
+function RequestsQueue() {
   const [status, setStatus] = React.useState<ClientRequestStatus | "">("")
   const [unclaimedOnly, setUnclaimedOnly] = React.useState(false)
   // The page a user picked, remembered with the filters it was picked under: changing a filter
@@ -40,13 +46,6 @@ export default function ClientRequestsPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Client requests</h1>
-        <p className="text-muted-foreground text-sm">
-          UK clients asking for a lawyer: who has each request, what they quoted and what the firm was charged. Newest first.
-        </p>
-      </div>
-
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs">
           Status
@@ -83,6 +82,44 @@ export default function ClientRequestsPage() {
           />
         </div>
       )}
+    </div>
+  )
+}
+
+export default function ClientRequestsPage() {
+  const [view, setView] = React.useState<(typeof VIEWS)[number]["id"]>("requests")
+
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Client requests</h1>
+        <p className="text-muted-foreground text-sm">
+          UK clients asking for a lawyer: who has each request, what they quoted and what the firm was charged. Newest first.
+        </p>
+      </div>
+
+      <div role="tablist" aria-label="Client requests views" className="flex w-fit gap-1 rounded-2xl bg-muted p-1">
+        {VIEWS.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            role="tab"
+            id={`client-requests-tab-${v.id}`}
+            aria-selected={view === v.id}
+            aria-controls={`client-requests-panel-${v.id}`}
+            onClick={() => setView(v.id)}
+            className={`h-8 cursor-pointer rounded-xl px-3 text-sm outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/30 ${
+              view === v.id ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      <div role="tabpanel" id={`client-requests-panel-${view}`} aria-labelledby={`client-requests-tab-${view}`}>
+        {view === "fees" ? <FeesSummary /> : <RequestsQueue />}
+      </div>
     </div>
   )
 }
