@@ -29,8 +29,9 @@ interface DataTableProps<TData, TValue> {
   itemLabel?: string
   total: number
   isFetching?: boolean
-  search: string
-  onSearchChange: (value: string) => void
+  /** Leave `onSearchChange` out for a list that has no search; the box is then not shown. */
+  search?: string
+  onSearchChange?: (value: string) => void
   sorting: SortingState
   onSortingChange: OnChangeFn<SortingState>
   page: number
@@ -70,12 +71,14 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="flex flex-col gap-4">
-      <Input
-        placeholder={searchPlaceholder}
-        value={search}
-        onChange={(event) => onSearchChange(event.target.value)}
-        className="max-w-sm"
-      />
+      {onSearchChange && (
+        <Input
+          placeholder={searchPlaceholder}
+          value={search ?? ""}
+          onChange={(event) => onSearchChange(event.target.value)}
+          className="max-w-sm"
+        />
+      )}
       <div className="overflow-hidden rounded-md border">
         <Table>
           <TableHeader>

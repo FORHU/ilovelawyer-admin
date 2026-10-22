@@ -62,7 +62,8 @@ function buildHeaders(extra?: HeadersInit): HeadersInit {
 async function throwIfNotOk(res: Response): Promise<void> {
   if (res.ok) return
   const error = await res.json().catch(() => ({ message: res.statusText }))
-  throw Object.assign(new Error(error.message ?? "Request failed"), { status: res.status })
+  // `code` is the API's machine-readable reason on the hand-off routes (e.g. REFUND_EXCEEDS_CHARGE).
+  throw Object.assign(new Error(error.message ?? "Request failed"), { status: res.status, code: error.code as string | undefined })
 }
 
 /** Like apiFetch, but returns the raw Response instead of parsing JSON, for file downloads. */

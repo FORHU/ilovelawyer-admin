@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Cpu, Loader2, LogOut, MessageSquareText, Receipt, ScrollText, Settings, ShieldCheck, Users } from "lucide-react"
+import { Cpu, Handshake, Loader2, LogOut, MessageSquareText, Receipt, ScrollText, Settings, ShieldCheck, Users } from "lucide-react"
 
 import {
   AlertDialog,
@@ -38,6 +38,7 @@ const navItems = [
   { title: "Audit trail", url: "/dashboard/audit", icon: ScrollText },
   { title: "Feedback", url: "/dashboard/feedback", icon: MessageSquareText },
   { title: "Billing", url: "/dashboard/billing", icon: Receipt },
+  { title: "Client requests", url: "/dashboard/client-requests", icon: Handshake },
   { title: "LLM Usage", url: "/dashboard/llm-usage", icon: Cpu },
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ]
