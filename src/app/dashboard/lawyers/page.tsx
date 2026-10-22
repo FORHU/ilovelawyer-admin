@@ -6,38 +6,37 @@ import { ChevronDown } from "lucide-react"
 
 import { columns } from "@/components/lawyers/columns"
 import { DataTable } from "@/components/data-table"
-import {
-  LAWYER_VERIFICATION_STATUSES,
-  type LawyerVerificationStatus,
-  useAdminLawyerVerificationsQuery,
-} from "@/lib/lawyers/queries"
+import { type LawyerVerificationStatus, useAdminLawyerVerificationsQuery } from "@/lib/lawyers/queries"
 
 const PAGE_SIZE = 20
 // The endpoint has no sortBy — nothing in columns.tsx declares a sortable header, so this is
 // just DataTable's required prop wired to a no-op, same as llm-usage's calls table.
 const NO_SORTING: SortingState = []
 
-const STATUS_LABELS: Record<LawyerVerificationStatus, string> = {
+// No UNSUBMITTED: the lawyer app only submits a complete application, so an unsubmitted profile is
+// at most an old half-filled draft, and there's nothing an admin can do with one.
+const FILTER_STATUSES = ["PENDING", "VERIFIED", "REJECTED"] as const satisfies readonly LawyerVerificationStatus[]
+type FilterStatus = (typeof FILTER_STATUSES)[number]
+
+const STATUS_LABELS: Record<FilterStatus, string> = {
   PENDING: "Pending",
-  VERIFIED: "Verified",
+  VERIFIED: "Approved",
   REJECTED: "Rejected",
-  UNSUBMITTED: "Unsubmitted",
 }
 
 // Same semantic colors as the status badges elsewhere on this page, so the filter reads as the
 // same vocabulary as the rows it's filtering.
-const STATUS_DOT_CLASS: Record<LawyerVerificationStatus, string> = {
+const STATUS_DOT_CLASS: Record<FilterStatus, string> = {
   PENDING: "bg-amber-500",
   VERIFIED: "bg-emerald-500",
   REJECTED: "bg-destructive",
-  UNSUBMITTED: "bg-slate-400",
 }
 
 const statusSelectClass =
   "h-8 w-48 appearance-none rounded-2xl border border-transparent bg-input/50 py-1.5 pr-8 pl-7 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
 
 export default function LawyersPage() {
-  const [status, setStatus] = React.useState<LawyerVerificationStatus>("PENDING")
+  const [status, setStatus] = React.useState<FilterStatus>("PENDING")
   const [page, setPage] = React.useState(1)
   const [search, setSearch] = React.useState("")
 
@@ -65,10 +64,11 @@ export default function LawyersPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Lawyer verifications</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Lawyer applications</h1>
         <p className="text-muted-foreground text-sm">
-          Lawyers waiting to receive client requests. Verifying confirms which jurisdictions they&apos;re qualified
-          in against the regulator&apos;s register; rejecting sends them a note and drops them from routing.
+          Lawyers applying to take on clients from ilovelawyer.com. Check each registration against the
+          regulator&apos;s register: approving confirms which jurisdictions they&apos;re qualified in and lets them
+          receive client requests; rejecting emails them the reason.
         </p>
       </div>
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -83,11 +83,11 @@ export default function LawyersPage() {
               className={statusSelectClass}
               value={status}
               onChange={(e) => {
-                setStatus(e.target.value as LawyerVerificationStatus)
+                setStatus(e.target.value as FilterStatus)
                 setPage(1)
               }}
             >
-              {LAWYER_VERIFICATION_STATUSES.map((s) => (
+              {FILTER_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {STATUS_LABELS[s]}
                 </option>

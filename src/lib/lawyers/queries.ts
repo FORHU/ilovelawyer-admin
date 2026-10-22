@@ -1,11 +1,11 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "@/lib/fetch"
 import { useAuthStore } from "@/lib/store/auth.store"
-import { mockListLawyerVerifications, mockRejectLawyer, mockVerifyLawyer } from "@/lib/lawyers/mocks"
 
 // Mirrors ilovelawyer-api's src/types/client-handoff.ts and the AdminLawyerVerification /
 // RegisterCheck schemas in src/swagger-client-handoff.ts (ilovelawyer-api#503, implemented by
-// #506). Copy from there, not the other way around, if the two drift.
+// #506), served by GET/POST /api/admin/lawyer-verifications. Copy from there, not the other way
+// around, if the two drift.
 export const LAWYER_REGULATORS = ["SRA", "LSS", "LSNI"] as const
 export type LawyerRegulator = (typeof LAWYER_REGULATORS)[number]
 
@@ -20,6 +20,12 @@ export type LawyerVerificationStatus = (typeof LAWYER_VERIFICATION_STATUSES)[num
 
 export const REGISTER_MISMATCH_REASONS = ["NOT_FOUND", "NAME", "NOT_PRACTISING", "JURISDICTION"] as const
 export type RegisterMismatchReason = (typeof REGISTER_MISMATCH_REASONS)[number]
+
+// LAWYER_REJECTION_REASONS in ilovelawyer-api's lawyer-verification.service.ts. Every reason but
+// OTHER sends the lawyer a canned sentence; the note is appended to it, or is the whole message
+// for OTHER.
+export const LAWYER_REJECTION_REASONS = ["NAME_MISMATCH", "NOT_PRACTISING", "WRONG_JURISDICTION", "OTHER"] as const
+export type LawyerRejectionReason = (typeof LAWYER_REJECTION_REASONS)[number]
 
 export interface RegisterCheck {
   register: LawyerRegulator
@@ -52,9 +58,11 @@ export interface AdminLawyerVerificationRow {
   email: string
   organizationName: string | null
   profile: AdminLawyerProfile
-  // Null when the register couldn't be reached — the admin checks by hand.
+  // Null when the register couldn't be reached — the admin checks by hand. Always null for now:
+  // the register check is deferred (business decision, 2026-10-21).
   registerCheck: RegisterCheck | null
-  submittedAt: string
+  // When the profile last joined the queue. Null only for UNSUBMITTED profiles.
+  submittedAt: string | null
 }
 
 export interface AdminLawyerVerificationsPage {
@@ -71,12 +79,6 @@ export interface AdminLawyerVerificationsQueryParams {
   limit: number
 }
 
-// ilovelawyer-api#506 isn't live yet, but its contract (ilovelawyer-api#503) is final — this
-// flag swaps the real calls below for the in-memory fixtures in lib/lawyers/mocks.ts so the
-// screen can be built and demoed now. Delete this flag, the mock branches below, and mocks.ts
-// together once #506 ships.
-const USE_MOCKS = process.env.NEXT_PUBLIC_MOCK_LAWYER_VERIFICATIONS === "true"
-
 const lawyerVerificationsQueryKey = (params: AdminLawyerVerificationsQueryParams) =>
   ["admin", "lawyer-verifications", params] as const
 
@@ -92,10 +94,7 @@ export function useAdminLawyerVerificationsQuery(params: AdminLawyerVerification
   const accessToken = useAuthStore((s) => s.accessToken)
   return useQuery({
     queryKey: lawyerVerificationsQueryKey(params),
-    queryFn: () =>
-      USE_MOCKS
-        ? mockListLawyerVerifications(params)
-        : apiFetch<AdminLawyerVerificationsPage>(`/api/admin/lawyer-verifications?${buildQueryString(params)}`),
+    queryFn: () => apiFetch<AdminLawyerVerificationsPage>(`/api/admin/lawyer-verifications?${buildQueryString(params)}`),
     enabled: !!accessToken,
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
@@ -114,12 +113,10 @@ export function useVerifyLawyerMutation() {
       confirmedJurisdictions: UkJurisdiction[]
       note?: string
     }) =>
-      USE_MOCKS
-        ? mockVerifyLawyer(userId, { confirmedJurisdictions, note })
-        : apiFetch<AdminLawyerVerificationRow>(`/api/admin/lawyer-verifications/${userId}/verify`, {
-            method: "POST",
-            body: JSON.stringify({ confirmedJurisdictions, note }),
-          }),
+      apiFetch<AdminLawyerVerificationRow>(`/api/admin/lawyer-verifications/${userId}/verify`, {
+        method: "POST",
+        body: JSON.stringify({ confirmedJurisdictions, note }),
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "lawyer-verifications"] }),
   })
 }
@@ -127,13 +124,11 @@ export function useVerifyLawyerMutation() {
 export function useRejectLawyerMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ userId, note }: { userId: string; note: string }) =>
-      USE_MOCKS
-        ? mockRejectLawyer(userId, { note })
-        : apiFetch<AdminLawyerVerificationRow>(`/api/admin/lawyer-verifications/${userId}/reject`, {
-            method: "POST",
-            body: JSON.stringify({ note }),
-          }),
+    mutationFn: ({ userId, reason, note }: { userId: string; reason: LawyerRejectionReason; note?: string }) =>
+      apiFetch<AdminLawyerVerificationRow>(`/api/admin/lawyer-verifications/${userId}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reason, note }),
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "lawyer-verifications"] }),
   })
 }
