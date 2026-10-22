@@ -4,6 +4,7 @@ import { type ColumnDef } from "@tanstack/react-table"
 import { AlertTriangle } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatDateTime, formatMoney } from "@/components/billing/format"
 import {
   CHARGE_KIND_LABELS,
@@ -59,8 +60,11 @@ function QuoteCell({ request }: { request: AdminClientRequest }) {
   )
 }
 
+/** The charge, and under it its status; each refund (who, why, status) shows on hover. */
 export function ChargeSummary({ charge }: { charge: AdminCharge }) {
   const refunded = charge.refunded.amountMinor > 0
+  const pending = charge.refundPending.amountMinor > 0
+  const failed = charge.refunds.some((r) => r.status === "FAILED")
   return (
     <div className="flex flex-col">
       <span className="whitespace-nowrap tabular-nums">
@@ -68,9 +72,28 @@ export function ChargeSummary({ charge }: { charge: AdminCharge }) {
       </span>
       <span className="text-muted-foreground text-xs">
         {CHARGE_STATUS_LABELS[charge.status]}
-        {refunded ? ` · ${formatMoney(charge.refunded)} back` : ""}
         {charge.provider === "DUMMY" ? " · test card" : ""}
       </span>
+      {charge.refunds.length > 0 && (
+        <Tooltip>
+          <TooltipTrigger render={<button type="button" className="cursor-help text-left text-xs" />}>
+            {refunded && <span className="text-muted-foreground block">−{formatMoney(charge.refunded)} refunded</span>}
+            {pending && <span className="block text-amber-600 dark:text-amber-400">{formatMoney(charge.refundPending)} refund pending</span>}
+            {!refunded && !pending && failed && <span className="text-destructive block">Refund failed</span>}
+          </TooltipTrigger>
+          <TooltipContent className="max-w-sm whitespace-normal">
+            <ul className="flex flex-col gap-1.5">
+              {charge.refunds.map((r) => (
+                <li key={r.id}>
+                  {formatMoney(r.amount)} · {r.status.toLowerCase()} · {formatDateTime(r.createdAt)}
+                  {r.admin ? ` · by ${r.admin.name ?? "a deleted admin"}` : ""}
+                  <br />“{r.reason}”{r.failureReason ? ` — ${r.failureReason}` : ""}
+                </li>
+              ))}
+            </ul>
+          </TooltipContent>
+        </Tooltip>
+      )}
     </div>
   )
 }
@@ -78,7 +101,7 @@ export function ChargeSummary({ charge }: { charge: AdminCharge }) {
 /** The requests queue. `renderChargeActions` adds the per-charge actions (refund) under each charge. */
 export function clientRequestColumns({
   renderChargeActions,
-}: { renderChargeActions?: (charge: AdminCharge) => React.ReactNode } = {}): ColumnDef<AdminClientRequest>[] {
+}: { renderChargeActions?: (charge: AdminCharge, request: AdminClientRequest) => React.ReactNode } = {}): ColumnDef<AdminClientRequest>[] {
   return [
     {
       accessorKey: "createdAt",
@@ -119,7 +142,7 @@ export function clientRequestColumns({
             {row.original.charges.map((charge) => (
               <div key={charge.id} className="flex items-center justify-between gap-3">
                 <ChargeSummary charge={charge} />
-                {renderChargeActions?.(charge)}
+                {renderChargeActions?.(charge, row.original)}
               </div>
             ))}
           </div>

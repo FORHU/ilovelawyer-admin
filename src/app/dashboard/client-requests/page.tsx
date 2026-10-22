@@ -4,6 +4,7 @@ import * as React from "react"
 import type { OnChangeFn, SortingState } from "@tanstack/react-table"
 
 import { DataTable } from "@/components/data-table"
+import { ChargeRefundAction } from "@/components/client-requests/charge-refund-action"
 import { clientRequestColumns } from "@/components/client-requests/columns"
 import { FeesSummary } from "@/components/client-requests/fees-summary"
 import { REQUEST_STATUS_LABELS } from "@/components/client-requests/format"
@@ -42,7 +43,10 @@ function RequestsQueue() {
 
   const list = useClientRequestsQuery(filters, page, PAGE_SIZE)
   const handleSortingChange: OnChangeFn<SortingState> = () => {}
-  const columns = React.useMemo(() => clientRequestColumns(), [])
+  const columns = React.useMemo(
+    () => clientRequestColumns({ renderChargeActions: (charge, request) => <ChargeRefundAction charge={charge} firmName={request.organizationName} /> }),
+    [],
+  )
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
