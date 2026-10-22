@@ -82,7 +82,11 @@ export const columns: ColumnDef<AdminLawyerVerificationRow>[] = [
   {
     accessorKey: "submittedAt",
     header: "Submitted",
-    cell: ({ row }) => <span className="text-muted-foreground">{formatDate(row.original.submittedAt)}</span>,
+    cell: ({ row }) => {
+      // Null only for an UNSUBMITTED profile, which the page's status filter doesn't offer.
+      const { submittedAt } = row.original
+      return <span className="text-muted-foreground">{submittedAt ? formatDate(submittedAt) : "—"}</span>
+    },
   },
   {
     id: "actions",
