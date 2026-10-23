@@ -18,17 +18,8 @@ export interface BulkApprovalProgress {
   finishedAt: string | null
 }
 
-// ilovelawyer-api's AccountTopUpPricingSvc.SubscriptionPlan — a placeholder monthly price (not yet
-// charged via recurring Stripe billing) and the account's included AI allowance, replacing the old
-// flat CASE_SPEND_LIMIT_USD.
-export interface SubscriptionPlan {
-  name: string
-  monthlyPriceUsd: number
-  includedAllowanceUsd: number
-}
-
 // ilovelawyer-api's AccountTopUpPricingSvc.listForAdmin entry: the per-tenant platform fee on a
-// lawyer's self-serve account AI top-up, and the subscription plan.
+// lawyer's self-serve account AI top-up.
 export interface AccountTopUpPricing {
   code: TenantCode
   name: string
@@ -36,9 +27,22 @@ export interface AccountTopUpPricing {
   feeAmount: number
   feeUpdatedAt: string | null
   feeUpdatedBy: { name: string | null; email: string } | null
-  plan: SubscriptionPlan
-  planUpdatedAt: string | null
-  planUpdatedBy: { name: string | null; email: string } | null
+}
+
+// ilovelawyer-api's PaymentPlan model — one admin-editable B2B subscription tier (Standard/Pro/Max
+// are placeholders) for a tenant: its fee, the AI allowance it includes, and its case limit.
+export interface PaymentPlan {
+  id: string
+  code: string
+  name: string
+  level: number
+  feeUsd: number
+  includedAllowanceUsd: number
+  caseLimit: number
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+  updatedBy: { name: string | null; email: string } | null
 }
 
 export interface TenantSettings {
@@ -51,6 +55,7 @@ export interface TenantSettings {
   pendingCount: number
   bulkApproval: BulkApprovalProgress | null
   accountTopUp: AccountTopUpPricing | null
+  paymentPlans: PaymentPlan[]
 }
 
 const settingsQueryKey = ["admin", "settings"] as const
@@ -92,17 +97,34 @@ export function useUpdateAccountTopUpFeeMutation() {
   })
 }
 
-export function useUpdateSubscriptionPlanMutation() {
+export interface PaymentPlanFields {
+  code: string
+  name: string
+  level?: number
+  feeUsd: number
+  includedAllowanceUsd: number
+  caseLimit: number
+}
+
+export function useCreatePaymentPlanMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ code, plan }: { code: TenantCode; plan: SubscriptionPlan }) =>
-      apiFetch<TenantSettings>(`/api/admin/settings/tenants/${code}`, {
+    mutationFn: ({ code, plan }: { code: TenantCode; plan: PaymentPlanFields }) =>
+      apiFetch<PaymentPlan>(`/api/admin/settings/tenants/${code}/payment-plans`, {
+        method: "POST",
+        body: JSON.stringify(plan),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
+  })
+}
+
+export function useUpdatePaymentPlanMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ code, planId, patch }: { code: TenantCode; planId: string; patch: Partial<PaymentPlanFields> & { isActive?: boolean } }) =>
+      apiFetch<PaymentPlan>(`/api/admin/settings/tenants/${code}/payment-plans/${planId}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          subscriptionPlanName: plan.name,
-          subscriptionPlanMonthlyPriceUsd: plan.monthlyPriceUsd,
-          subscriptionPlanIncludedAllowanceUsd: plan.includedAllowanceUsd,
-        }),
+        body: JSON.stringify(patch),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
   })
