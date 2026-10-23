@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -41,26 +41,15 @@ export function AccountTopUpPricingCard({ tenant }: { tenant: TenantSettings }) 
   const feeMutation = useUpdateAccountTopUpFeeMutation()
   const planMutation = useUpdateSubscriptionPlanMutation()
 
+  // Seeded once from the server value at mount — not kept in sync by an effect. The parent remounts
+  // this card (via `key`, keyed on feeUpdatedAt/planUpdatedAt) whenever the server value actually
+  // changes, which re-seeds these naturally; a save-in-flight is never clobbered, since nothing
+  // changes the key until that save's own invalidation lands the new value.
   const [feeType, setFeeType] = useState<"FIXED" | "PERCENT">(pricing?.feeType ?? "FIXED")
   const [feeAmount, setFeeAmount] = useState(String(pricing?.feeAmount ?? ""))
   const [planName, setPlanName] = useState(pricing?.plan.name ?? DEFAULT_PLAN.name)
   const [monthlyPrice, setMonthlyPrice] = useState(String(pricing?.plan.monthlyPriceUsd ?? DEFAULT_PLAN.monthlyPriceUsd))
   const [includedAllowance, setIncludedAllowance] = useState(String(pricing?.plan.includedAllowanceUsd ?? DEFAULT_PLAN.includedAllowanceUsd))
-
-  // Only re-sync from the server when nothing is pending, so a save-in-flight isn't clobbered by
-  // the refetch its own onSuccess triggers.
-  useEffect(() => {
-    if (feeMutation.isPending) return
-    setFeeType(pricing?.feeType ?? "FIXED")
-    setFeeAmount(String(pricing?.feeAmount ?? ""))
-  }, [pricing, feeMutation.isPending])
-
-  useEffect(() => {
-    if (planMutation.isPending) return
-    setPlanName(pricing?.plan.name ?? DEFAULT_PLAN.name)
-    setMonthlyPrice(String(pricing?.plan.monthlyPriceUsd ?? DEFAULT_PLAN.monthlyPriceUsd))
-    setIncludedAllowance(String(pricing?.plan.includedAllowanceUsd ?? DEFAULT_PLAN.includedAllowanceUsd))
-  }, [pricing, planMutation.isPending])
 
   const parsedFee = Number(feeAmount)
   const feeValid = feeAmount.trim() !== "" && Number.isFinite(parsedFee) && parsedFee >= 0 && (feeType !== "PERCENT" || parsedFee <= 100)
