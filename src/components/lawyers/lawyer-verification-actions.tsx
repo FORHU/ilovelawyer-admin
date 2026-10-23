@@ -21,20 +21,31 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  LAWYER_REJECTION_REASONS,
+  REJECTION_REASONS_BY_SITE,
   UK_JURISDICTIONS,
   type AdminLawyerVerificationRow,
   type LawyerRejectionReason,
+  type LawyerSite,
   type UkJurisdiction,
   useRejectLawyerMutation,
   useVerifyLawyerMutation,
 } from "@/lib/lawyers/queries"
 
-const REJECTION_REASON_LABELS: Record<LawyerRejectionReason, string> = {
-  NAME_MISMATCH: "Name doesn't match the register",
-  NOT_PRACTISING: "Not currently practising",
-  WRONG_JURISDICTION: "Wrong jurisdiction",
-  OTHER: "Other",
+/** Each site's reasons, in its own wording. NAME_MISMATCH is in both, checked against a different
+ * record. */
+const REJECTION_REASON_LABELS: Record<LawyerSite, Partial<Record<LawyerRejectionReason, string>>> = {
+  UK: {
+    NAME_MISMATCH: "Name doesn't match the register",
+    NOT_PRACTISING: "Not currently practising",
+    WRONG_JURISDICTION: "Wrong jurisdiction",
+    OTHER: "Other",
+  },
+  PH: {
+    NAME_MISMATCH: "Name doesn't match the Roll of Attorneys",
+    ROLL_NOT_FOUND: "Roll number not found",
+    NOT_IN_GOOD_STANDING: "Not in good standing with the IBP",
+    OTHER: "Other",
+  },
 }
 
 const selectClass =
@@ -76,16 +87,24 @@ export function LawyerVerificationActions({ lawyer }: { lawyer: AdminLawyerVerif
   )
 }
 
+/** The jurisdictions a UK lawyer claimed; none on PH. */
+function claimedJurisdictions(lawyer: AdminLawyerVerificationRow): UkJurisdiction[] {
+  const r = lawyer.profile.registration
+  return r.country === "UK" ? r.qualifiedJurisdictions : []
+}
+
 function VerifyDialog({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
   const verifyMutation = useVerifyLawyerMutation()
   const [open, setOpen] = useState(false)
-  const [confirmed, setConfirmed] = useState<UkJurisdiction[]>(lawyer.profile.qualifiedJurisdictions)
+  const [confirmed, setConfirmed] = useState<UkJurisdiction[]>(() => claimedJurisdictions(lawyer))
   const [note, setNote] = useState("")
+  // UK: the admin confirms the jurisdictions on the register. PH has none to confirm.
+  const uk = lawyer.profile.country === "UK"
 
   // A register mismatch needs the admin to say why they're approving anyway. The register check
   // is deferred for now (registerCheck is always null), so this only bites once it lands.
   const noteRequired = (lawyer.registerCheck?.mismatches.length ?? 0) > 0
-  const canSubmit = confirmed.length > 0 && (!noteRequired || note.trim().length > 0)
+  const canSubmit = (!uk || confirmed.length > 0) && (!noteRequired || note.trim().length > 0)
 
   function toggleJurisdiction(jurisdiction: UkJurisdiction) {
     setConfirmed((prev) =>
@@ -95,7 +114,7 @@ function VerifyDialog({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
 
   function handleVerify() {
     verifyMutation.mutate(
-      { userId: lawyer.userId, confirmedJurisdictions: confirmed, note: note.trim() || undefined },
+      { userId: lawyer.userId, confirmedJurisdictions: uk ? confirmed : undefined, note: note.trim() || undefined },
       {
         onSuccess: () => {
           toast.success(`${lawyer.name} approved`)
@@ -112,7 +131,7 @@ function VerifyDialog({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
       onOpenChange={(next) => {
         if (verifyMutation.isPending) return
         if (next) {
-          setConfirmed(lawyer.profile.qualifiedJurisdictions)
+          setConfirmed(claimedJurisdictions(lawyer))
           setNote("")
         }
         setOpen(next)
@@ -123,28 +142,31 @@ function VerifyDialog({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
         <DialogHeader>
           <DialogTitle>Approve {lawyer.name}?</DialogTitle>
           <DialogDescription>
-            Confirm which jurisdictions the register shows they&apos;re qualified in. They can start receiving client
-            requests once approved.
+            {uk
+              ? "Confirm which jurisdictions the register shows they're qualified in. They can start receiving client requests once approved."
+              : "Check their Roll of Attorneys number and IBP chapter. Their profile shows an Approved badge once approved."}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-2">
-          {UK_JURISDICTIONS.map((jurisdiction) => {
-            const id = `jurisdiction-${lawyer.userId}-${jurisdiction}`
-            return (
-              <div key={jurisdiction} className="flex items-center gap-2">
-                <Checkbox
-                  id={id}
-                  checked={confirmed.includes(jurisdiction)}
-                  onCheckedChange={() => toggleJurisdiction(jurisdiction)}
-                  disabled={verifyMutation.isPending}
-                />
-                <Label htmlFor={id} className="font-normal select-text">
-                  {jurisdiction}
-                </Label>
-              </div>
-            )
-          })}
-        </div>
+        {uk && (
+          <div className="flex flex-col gap-2">
+            {UK_JURISDICTIONS.map((jurisdiction) => {
+              const id = `jurisdiction-${lawyer.userId}-${jurisdiction}`
+              return (
+                <div key={jurisdiction} className="flex items-center gap-2">
+                  <Checkbox
+                    id={id}
+                    checked={confirmed.includes(jurisdiction)}
+                    onCheckedChange={() => toggleJurisdiction(jurisdiction)}
+                    disabled={verifyMutation.isPending}
+                  />
+                  <Label htmlFor={id} className="font-normal select-text">
+                    {jurisdiction}
+                  </Label>
+                </div>
+              )
+            })}
+          </div>
+        )}
         <div className="flex flex-col gap-2">
           <Label className="font-normal select-text">
             Note for the audit log{noteRequired ? " — required, the register didn't match" : " (optional)"}
@@ -230,9 +252,9 @@ function RejectDialog({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
             <option value="" disabled>
               Choose a reason…
             </option>
-            {LAWYER_REJECTION_REASONS.map((r) => (
+            {REJECTION_REASONS_BY_SITE[lawyer.profile.country].map((r) => (
               <option key={r} value={r}>
-                {REJECTION_REASON_LABELS[r]}
+                {REJECTION_REASON_LABELS[lawyer.profile.country][r]}
               </option>
             ))}
           </select>
