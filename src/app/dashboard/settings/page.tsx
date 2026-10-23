@@ -24,7 +24,13 @@ export default function SettingsPage() {
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             {data.tenants.map((tenant) => (
-              <AccountTopUpPricingCard key={tenant.code} tenant={tenant} />
+              // Keyed on the server timestamps, not just tenant.code: remounts the card (re-seeding
+              // its local draft state fresh) whenever the fee or plan actually changes on the
+              // server, instead of syncing with an effect.
+              <AccountTopUpPricingCard
+                key={`${tenant.code}-${tenant.accountTopUp?.feeUpdatedAt}-${tenant.accountTopUp?.planUpdatedAt}`}
+                tenant={tenant}
+              />
             ))}
           </div>
         </>
