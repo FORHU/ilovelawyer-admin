@@ -18,6 +18,29 @@ export interface BulkApprovalProgress {
   finishedAt: string | null
 }
 
+// ilovelawyer-api's AccountTopUpPricingSvc.SubscriptionPlan — a placeholder monthly price (not yet
+// charged via recurring Stripe billing) and the account's included AI allowance, replacing the old
+// flat CASE_SPEND_LIMIT_USD.
+export interface SubscriptionPlan {
+  name: string
+  monthlyPriceUsd: number
+  includedAllowanceUsd: number
+}
+
+// ilovelawyer-api's AccountTopUpPricingSvc.listForAdmin entry: the per-tenant platform fee on a
+// lawyer's self-serve account AI top-up, and the subscription plan.
+export interface AccountTopUpPricing {
+  code: TenantCode
+  name: string
+  feeType: "FIXED" | "PERCENT"
+  feeAmount: number
+  feeUpdatedAt: string | null
+  feeUpdatedBy: { name: string | null; email: string } | null
+  plan: SubscriptionPlan
+  planUpdatedAt: string | null
+  planUpdatedBy: { name: string | null; email: string } | null
+}
+
 export interface TenantSettings {
   code: TenantCode
   name: string
@@ -27,6 +50,7 @@ export interface TenantSettings {
   // Verified PENDING accounts — exactly the ones "Approve all pending" would take.
   pendingCount: number
   bulkApproval: BulkApprovalProgress | null
+  accountTopUp: AccountTopUpPricing | null
 }
 
 const settingsQueryKey = ["admin", "settings"] as const
@@ -51,6 +75,34 @@ export function useUpdateTenantSettingMutation() {
       apiFetch<TenantSettings>(`/api/admin/settings/tenants/${code}`, {
         method: "PATCH",
         body: JSON.stringify({ autoApproveSignups }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
+  })
+}
+
+export function useUpdateAccountTopUpFeeMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ code, feeType, feeAmount }: { code: TenantCode; feeType: "FIXED" | "PERCENT"; feeAmount: number }) =>
+      apiFetch<TenantSettings>(`/api/admin/settings/tenants/${code}`, {
+        method: "PATCH",
+        body: JSON.stringify({ accountTopUpFeeType: feeType, accountTopUpFeeAmount: feeAmount }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
+  })
+}
+
+export function useUpdateSubscriptionPlanMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ code, plan }: { code: TenantCode; plan: SubscriptionPlan }) =>
+      apiFetch<TenantSettings>(`/api/admin/settings/tenants/${code}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          subscriptionPlanName: plan.name,
+          subscriptionPlanMonthlyPriceUsd: plan.monthlyPriceUsd,
+          subscriptionPlanIncludedAllowanceUsd: plan.includedAllowanceUsd,
+        }),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
   })
