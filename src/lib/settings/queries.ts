@@ -40,7 +40,8 @@ export interface PaymentPlan {
   includedAllowanceUsd: number
   caseLimit: number
   isActive: boolean
-  updatedAt: string | null
+  createdAt: string
+  updatedAt: string
   updatedBy: { name: string | null; email: string } | null
 }
 
@@ -125,15 +126,6 @@ export function useUpdatePaymentPlanMutation() {
         method: "PATCH",
         body: JSON.stringify(patch),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
-  })
-}
-
-export function useDeactivatePaymentPlanMutation() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ code, planId }: { code: TenantCode; planId: string }) =>
-      apiFetch<PaymentPlan>(`/api/admin/settings/tenants/${code}/payment-plans/${planId}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
   })
 }

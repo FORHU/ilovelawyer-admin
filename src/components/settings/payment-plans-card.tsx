@@ -14,7 +14,6 @@ import {
   type PaymentPlan,
   type TenantSettings,
   useCreatePaymentPlanMutation,
-  useDeactivatePaymentPlanMutation,
   useUpdatePaymentPlanMutation,
 } from "@/lib/settings/queries"
 
@@ -47,7 +46,6 @@ function TierRow({ tenantCode, plan }: { tenantCode: TenantSettings["code"]; pla
   // naturally; a save-in-flight is never clobbered.
   const [draft, setDraft] = useState<Draft>(() => draftFrom(plan))
   const updateMutation = useUpdatePaymentPlanMutation()
-  const deactivateMutation = useDeactivatePaymentPlanMutation()
 
   const parsed = parseDraft(draft)
   const dirty = draft.name !== plan.name || parsed.feeUsd !== plan.feeUsd || parsed.includedAllowanceUsd !== plan.includedAllowanceUsd || parsed.caseLimit !== plan.caseLimit
@@ -67,7 +65,7 @@ function TierRow({ tenantCode, plan }: { tenantCode: TenantSettings["code"]; pla
     )
   }
 
-  const busy = updateMutation.isPending || deactivateMutation.isPending
+  const busy = updateMutation.isPending
 
   return (
     <div className="flex flex-col gap-3 rounded-md border p-3">
@@ -101,7 +99,10 @@ function TierRow({ tenantCode, plan }: { tenantCode: TenantSettings["code"]; pla
         </div>
       </div>
       <span className="text-muted-foreground text-xs">
-        {plan.updatedAt ? `Last changed by ${plan.updatedBy?.name ?? plan.updatedBy?.email ?? "a deleted admin"} · ${formatDateTime(plan.updatedAt)}` : "Never changed"}
+        {/* No editor and never updated since it was created: one of the default tiers, as seeded. */}
+        {!plan.updatedBy && plan.updatedAt === plan.createdAt
+          ? "Default tier · not changed yet"
+          : `Last changed by ${plan.updatedBy?.name ?? plan.updatedBy?.email ?? "a deleted admin"} · ${formatDateTime(plan.updatedAt)}`}
       </span>
     </div>
   )
@@ -173,7 +174,7 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
  * usage it includes for the whole account, and how many cases it allows. Replaces the old single
  * flat subscription plan: a tenant can now offer several tiers, and a lawyer's account is on
  * exactly one of them (chosen at signup, upgradeable later). A tier is never deleted, only hidden
- * from new signups (the trash icon toggles this) — lawyers already on it keep working.
+ * from new signups (the eye icon toggles this) — lawyers already on it keep working.
  */
 export function PaymentPlansCard({ tenant }: { tenant: TenantSettings }) {
   const plans = [...tenant.paymentPlans].sort((a, b) => a.level - b.level)
@@ -187,7 +188,7 @@ export function PaymentPlansCard({ tenant }: { tenant: TenantSettings }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
-        <p className="text-muted-foreground">A lawyer picks one of these at signup and can upgrade later. Each tier&apos;s fee is charged via Stripe.</p>
+        <p className="text-muted-foreground">A lawyer picks one of these at signup and can upgrade later. Stripe billing isn&apos;t live yet, so no fee is charged.</p>
         {plans.length === 0 && <p className="text-muted-foreground text-sm">No tiers yet.</p>}
         {plans.map((plan) => (
           <TierRow key={plan.id} tenantCode={tenant.code} plan={plan} />
