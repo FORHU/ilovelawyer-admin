@@ -10,6 +10,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import { Textarea } from "@/components/ui/textarea"
 import {
   type PaymentPlan,
   type TenantSettings,
@@ -23,13 +24,22 @@ function formatDateTime(iso: string): string {
 
 interface Draft {
   name: string
+  description: string
+  adminNotes: string
   feeUsd: string
   includedAllowanceUsd: string
   caseLimit: string
 }
 
 function draftFrom(plan: PaymentPlan): Draft {
-  return { name: plan.name, feeUsd: String(plan.feeUsd), includedAllowanceUsd: String(plan.includedAllowanceUsd), caseLimit: String(plan.caseLimit) }
+  return {
+    name: plan.name,
+    description: plan.description ?? "",
+    adminNotes: plan.adminNotes ?? "",
+    feeUsd: String(plan.feeUsd),
+    includedAllowanceUsd: String(plan.includedAllowanceUsd),
+    caseLimit: String(plan.caseLimit),
+  }
 }
 
 function parseDraft(draft: Draft) {
@@ -48,12 +58,29 @@ function TierRow({ tenantCode, plan }: { tenantCode: TenantSettings["code"]; pla
   const updateMutation = useUpdatePaymentPlanMutation()
 
   const parsed = parseDraft(draft)
-  const dirty = draft.name !== plan.name || parsed.feeUsd !== plan.feeUsd || parsed.includedAllowanceUsd !== plan.includedAllowanceUsd || parsed.caseLimit !== plan.caseLimit
+  const dirty =
+    draft.name !== plan.name ||
+    draft.description !== (plan.description ?? "") ||
+    draft.adminNotes !== (plan.adminNotes ?? "") ||
+    parsed.feeUsd !== plan.feeUsd ||
+    parsed.includedAllowanceUsd !== plan.includedAllowanceUsd ||
+    parsed.caseLimit !== plan.caseLimit
 
   function save() {
     if (!parsed.valid) return
     updateMutation.mutate(
-      { code: tenantCode, planId: plan.id, patch: { name: draft.name.trim(), feeUsd: parsed.feeUsd, includedAllowanceUsd: parsed.includedAllowanceUsd, caseLimit: parsed.caseLimit } },
+      {
+        code: tenantCode,
+        planId: plan.id,
+        patch: {
+          name: draft.name.trim(),
+          description: draft.description.trim(),
+          adminNotes: draft.adminNotes.trim(),
+          feeUsd: parsed.feeUsd,
+          includedAllowanceUsd: parsed.includedAllowanceUsd,
+          caseLimit: parsed.caseLimit,
+        },
+      },
       { onSuccess: () => toast.success(`${draft.name.trim()} saved`), onError: (err) => toast.error((err as Error).message) }
     )
   }
@@ -77,6 +104,24 @@ function TierRow({ tenantCode, plan }: { tenantCode: TenantSettings["code"]; pla
         <Button type="button" size="icon" variant="ghost" onClick={toggleActive} disabled={busy} title={plan.isActive ? "Hide from new signups" : "Reactivate"}>
           {plan.isActive ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </Button>
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs">Description (shown to lawyers on the plan picker)</Label>
+        <Textarea
+          value={draft.description}
+          onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+          placeholder="What this tier is for — a lawyer sees this when choosing a plan"
+          className="min-h-14 text-sm"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs">Admin notes (internal only — never shown to lawyers)</Label>
+        <Textarea
+          value={draft.adminNotes}
+          onChange={(e) => setDraft((d) => ({ ...d, adminNotes: e.target.value }))}
+          placeholder="Context for whoever edits this tier next — why these numbers, anything to know"
+          className="min-h-14 text-sm"
+        />
       </div>
       <div className="flex flex-wrap gap-4">
         <div className="flex flex-col gap-1">
@@ -110,7 +155,7 @@ function TierRow({ tenantCode, plan }: { tenantCode: TenantSettings["code"]; pla
 
 function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
   const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState<Draft>({ name: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "" })
+  const [draft, setDraft] = useState<Draft>({ name: "", description: "", adminNotes: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "" })
   const createMutation = useCreatePaymentPlanMutation()
   const parsed = parseDraft(draft)
 
@@ -127,11 +172,22 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
     if (!parsed.valid) return
     const code = draft.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")
     createMutation.mutate(
-      { code: tenantCode, plan: { code, name: draft.name.trim(), feeUsd: parsed.feeUsd, includedAllowanceUsd: parsed.includedAllowanceUsd, caseLimit: parsed.caseLimit } },
+      {
+        code: tenantCode,
+        plan: {
+          code,
+          name: draft.name.trim(),
+          description: draft.description.trim(),
+          adminNotes: draft.adminNotes.trim(),
+          feeUsd: parsed.feeUsd,
+          includedAllowanceUsd: parsed.includedAllowanceUsd,
+          caseLimit: parsed.caseLimit,
+        },
+      },
       {
         onSuccess: () => {
           toast.success(`${draft.name.trim()} created`)
-          setDraft({ name: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "" })
+          setDraft({ name: "", description: "", adminNotes: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "" })
           setOpen(false)
         },
         onError: (err) => toast.error((err as Error).message),
@@ -142,6 +198,24 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
   return (
     <div className="flex flex-col gap-3 rounded-md border border-dashed p-3">
       <Input value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Tier name" className="h-8 max-w-40" />
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs">Description (shown to lawyers)</Label>
+        <Textarea
+          value={draft.description}
+          onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+          placeholder="What this tier is for"
+          className="min-h-14 text-sm"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs">Admin notes (internal only)</Label>
+        <Textarea
+          value={draft.adminNotes}
+          onChange={(e) => setDraft((d) => ({ ...d, adminNotes: e.target.value }))}
+          placeholder="Context for whoever edits this tier next"
+          className="min-h-14 text-sm"
+        />
+      </div>
       <div className="flex flex-wrap gap-4">
         <div className="flex flex-col gap-1">
           <Label className="text-xs">Fee (USD)</Label>
