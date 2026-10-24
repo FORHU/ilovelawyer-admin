@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Eye, EyeOff, Loader2, Plus } from "lucide-react"
 import { toast } from "sonner"
 
@@ -50,7 +50,18 @@ function parseDraft(draft: Draft) {
   return { feeUsd, includedAllowanceUsd, caseLimit, valid }
 }
 
-function TierRow({ tenantCode, plan }: { tenantCode: TenantSettings["code"]; plan: PaymentPlan }) {
+function TierRow({
+  tenantCode,
+  plan,
+  onDirtyChange,
+}: {
+  tenantCode: TenantSettings["code"]
+  plan: PaymentPlan
+  /** Reports this row's current save-eligibility to the parent, so "Save all" can reach it — see
+   * PaymentPlansCard. Re-registers every render (not just on dirty/valid change) so the closure
+   * "Save all" calls always has this row's latest draft, never a stale one from an earlier render. */
+  onDirtyChange: (planId: string, canSave: boolean, save: () => void) => void
+}) {
   // Seeded once from the server value at mount — the parent remounts this whole card (via `key`,
   // keyed on every tier's updatedAt) whenever a tier actually changes on the server, which re-seeds
   // naturally; a save-in-flight is never clobbered.
@@ -93,6 +104,10 @@ function TierRow({ tenantCode, plan }: { tenantCode: TenantSettings["code"]; pla
   }
 
   const busy = updateMutation.isPending
+
+  useEffect(() => {
+    onDirtyChange(plan.id, parsed.valid && dirty && !busy, save)
+  })
 
   return (
     <div className="flex flex-col gap-3 rounded-md border p-3">
@@ -253,19 +268,43 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
 export function PaymentPlansCard({ tenant }: { tenant: TenantSettings }) {
   const plans = [...tenant.paymentPlans].sort((a, b) => a.level - b.level)
 
+  // Each TierRow owns its own draft state (see its comment) and still saves independently via its
+  // own Save button — this just also lets "Save all" reach every dirty row's latest save() at
+  // once, without lifting that state up. A row reports itself here on every render; the ref always
+  // holds the current closures, so "Save all" never calls a stale one.
+  const saveable = useRef<Record<string, (() => void) | undefined>>({})
+  const [saveableCount, setSaveableCount] = useState(0)
+
+  function handleDirtyChange(planId: string, canSave: boolean, save: () => void) {
+    saveable.current[planId] = canSave ? save : undefined
+    const count = Object.values(saveable.current).filter(Boolean).length
+    setSaveableCount((prev) => (prev === count ? prev : count))
+  }
+
+  function saveAll() {
+    Object.values(saveable.current).forEach((save) => save?.())
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs">{tenant.code}</span>
-          Subscription tiers
+        <CardTitle className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs">{tenant.code}</span>
+            Subscription tiers
+          </span>
+          {saveableCount > 0 && (
+            <Button type="button" size="sm" variant="outline" onClick={saveAll}>
+              Save all ({saveableCount})
+            </Button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
         <p className="text-muted-foreground">A lawyer picks one of these at signup and can upgrade later. Stripe billing isn&apos;t live yet, so no fee is charged.</p>
         {plans.length === 0 && <p className="text-muted-foreground text-sm">No tiers yet.</p>}
         {plans.map((plan) => (
-          <TierRow key={plan.id} tenantCode={tenant.code} plan={plan} />
+          <TierRow key={plan.id} tenantCode={tenant.code} plan={plan} onDirtyChange={handleDirtyChange} />
         ))}
       </CardContent>
       <Separator />
