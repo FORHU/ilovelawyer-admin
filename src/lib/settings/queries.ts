@@ -35,6 +35,10 @@ export interface PaymentPlan {
   id: string
   code: string
   name: string
+  // Shown to the lawyer on the plan picker.
+  description: string | null
+  // Admin-only — never sent to a lawyer.
+  adminNotes: string | null
   level: number
   feeUsd: number
   includedAllowanceUsd: number
@@ -100,6 +104,8 @@ export function useUpdateAccountTopUpFeeMutation() {
 export interface PaymentPlanFields {
   code: string
   name: string
+  description?: string
+  adminNotes?: string
   level?: number
   feeUsd: number
   includedAllowanceUsd: number
