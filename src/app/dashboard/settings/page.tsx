@@ -8,6 +8,8 @@ import { ClientTopUpPacksCard } from "@/components/settings/client-topup-packs-c
 import { ClientPromosCard } from "@/components/settings/client-promos-card"
 import { useAdminSettingsQuery } from "@/lib/settings/queries"
 import { useClientPricingQuery } from "@/lib/settings/client-pricing"
+import { LawyerPricingCard } from "@/components/settings/lawyer-pricing-card"
+import { lawyerCurrency, useLawyerPricingQuery } from "@/lib/settings/lawyer-pricing"
 
 /** The client app's prices, per tenant like the subscription tiers: a client pays their own
  * tenant's. Each card is keyed on its rows' updatedAt so a change saved anywhere re-seeds its draft
@@ -57,6 +59,35 @@ function ClientPricingSection() {
   )
 }
 
+/** What lawyers pay in the UK client hand-off, per tenant (ilovelawyer-api#598): the introduction
+ * fee and the AI top-up packs. Each card is keyed on its rows' updatedAt, like the sections above. */
+function LawyerPricingSection() {
+  const { data, isLoading, isError, error } = useLawyerPricingQuery()
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight">Lawyer fees</h2>
+        <p className="text-muted-foreground text-sm">
+          What lawyers pay when a client confirms them, and for more AI on an engaged case. Changes reach the next charge within about a minute.
+        </p>
+      </div>
+      {isLoading && <p className="text-muted-foreground text-sm">Loading lawyer fees…</p>}
+      {isError && <p className="text-destructive text-sm">{(error as Error).message}</p>}
+      {data && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {data.tenants.map((tenant) => (
+            <LawyerPricingCard
+              key={`${tenant.code}-${tenant.introFee?.updatedAt}-${tenant.packs.map((p) => `${p.id}:${p.updatedAt}`).join(",")}`}
+              tenant={tenant}
+              currency={lawyerCurrency(data)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const { data, isLoading, isError, error } = useAdminSettingsQuery()
 
@@ -97,6 +128,7 @@ export default function SettingsPage() {
         </>
       )}
       <ClientPricingSection />
+      <LawyerPricingSection />
     </div>
   )
 }
