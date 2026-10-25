@@ -43,6 +43,8 @@ export interface PaymentPlan {
   feeUsd: number
   includedAllowanceUsd: number
   caseLimit: number
+  /** Client requests (UK client hand-off) a lawyer on this tier can take on per calendar month. 0 = unlimited. */
+  clientRequestLimit: number
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -110,6 +112,7 @@ export interface PaymentPlanFields {
   feeUsd: number
   includedAllowanceUsd: number
   caseLimit: number
+  clientRequestLimit?: number
 }
 
 export function useCreatePaymentPlanMutation() {

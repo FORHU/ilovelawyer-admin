@@ -29,6 +29,7 @@ interface Draft {
   feeUsd: string
   includedAllowanceUsd: string
   caseLimit: string
+  clientRequestLimit: string
 }
 
 function draftFrom(plan: PaymentPlan): Draft {
@@ -39,6 +40,7 @@ function draftFrom(plan: PaymentPlan): Draft {
     feeUsd: String(plan.feeUsd),
     includedAllowanceUsd: String(plan.includedAllowanceUsd),
     caseLimit: String(plan.caseLimit),
+    clientRequestLimit: String(plan.clientRequestLimit ?? 0),
   }
 }
 
@@ -46,8 +48,19 @@ function parseDraft(draft: Draft) {
   const feeUsd = Number(draft.feeUsd)
   const includedAllowanceUsd = Number(draft.includedAllowanceUsd)
   const caseLimit = Number(draft.caseLimit)
-  const valid = draft.name.trim() !== "" && Number.isFinite(feeUsd) && feeUsd >= 0 && Number.isFinite(includedAllowanceUsd) && includedAllowanceUsd >= 0 && Number.isInteger(caseLimit) && caseLimit >= 0
-  return { feeUsd, includedAllowanceUsd, caseLimit, valid }
+  // Left empty (a new tier) it's 0: unlimited.
+  const clientRequestLimit = Number(draft.clientRequestLimit || 0)
+  const valid =
+    draft.name.trim() !== "" &&
+    Number.isFinite(feeUsd) &&
+    feeUsd >= 0 &&
+    Number.isFinite(includedAllowanceUsd) &&
+    includedAllowanceUsd >= 0 &&
+    Number.isInteger(caseLimit) &&
+    caseLimit >= 0 &&
+    Number.isInteger(clientRequestLimit) &&
+    clientRequestLimit >= 0
+  return { feeUsd, includedAllowanceUsd, caseLimit, clientRequestLimit, valid }
 }
 
 function TierRow({
@@ -75,7 +88,8 @@ function TierRow({
     draft.adminNotes !== (plan.adminNotes ?? "") ||
     parsed.feeUsd !== plan.feeUsd ||
     parsed.includedAllowanceUsd !== plan.includedAllowanceUsd ||
-    parsed.caseLimit !== plan.caseLimit
+    parsed.caseLimit !== plan.caseLimit ||
+    parsed.clientRequestLimit !== (plan.clientRequestLimit ?? 0)
 
   function save() {
     if (!parsed.valid) return
@@ -90,6 +104,7 @@ function TierRow({
           feeUsd: parsed.feeUsd,
           includedAllowanceUsd: parsed.includedAllowanceUsd,
           caseLimit: parsed.caseLimit,
+          clientRequestLimit: parsed.clientRequestLimit,
         },
       },
       { onSuccess: () => toast.success(`${draft.name.trim()} saved`), onError: (err) => toast.error((err as Error).message) }
@@ -151,6 +166,20 @@ function TierRow({
           <Label className="text-xs">Case limit</Label>
           <Input type="number" min={0} step="1" value={draft.caseLimit} onChange={(e) => setDraft((d) => ({ ...d, caseLimit: e.target.value }))} className="h-8 w-24" />
         </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" title="Client requests a lawyer can take on per calendar month, from the client app (UK). 0 = unlimited.">
+            Client requests / month
+          </Label>
+          <Input
+            type="number"
+            min={0}
+            step="1"
+            value={draft.clientRequestLimit}
+            onChange={(e) => setDraft((d) => ({ ...d, clientRequestLimit: e.target.value }))}
+            placeholder="0 = unlimited"
+            className="h-8 w-32"
+          />
+        </div>
         <div className="ml-auto flex items-end">
           <Button size="sm" onClick={save} disabled={!parsed.valid || !dirty || busy}>
             {updateMutation.isPending && <Loader2 className="size-3.5 animate-spin" />}
@@ -170,7 +199,7 @@ function TierRow({
 
 function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
   const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState<Draft>({ name: "", description: "", adminNotes: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "" })
+  const [draft, setDraft] = useState<Draft>({ name: "", description: "", adminNotes: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "", clientRequestLimit: "" })
   const createMutation = useCreatePaymentPlanMutation()
   const parsed = parseDraft(draft)
 
@@ -197,12 +226,13 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
           feeUsd: parsed.feeUsd,
           includedAllowanceUsd: parsed.includedAllowanceUsd,
           caseLimit: parsed.caseLimit,
+          clientRequestLimit: parsed.clientRequestLimit,
         },
       },
       {
         onSuccess: () => {
           toast.success(`${draft.name.trim()} created`)
-          setDraft({ name: "", description: "", adminNotes: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "" })
+          setDraft({ name: "", description: "", adminNotes: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "", clientRequestLimit: "" })
           setOpen(false)
         },
         onError: (err) => toast.error((err as Error).message),
@@ -244,6 +274,20 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
           <Label className="text-xs">Case limit</Label>
           <Input type="number" min={0} step="1" value={draft.caseLimit} onChange={(e) => setDraft((d) => ({ ...d, caseLimit: e.target.value }))} className="h-8 w-24" />
         </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" title="Client requests a lawyer can take on per calendar month, from the client app (UK). 0 = unlimited.">
+            Client requests / month
+          </Label>
+          <Input
+            type="number"
+            min={0}
+            step="1"
+            value={draft.clientRequestLimit}
+            onChange={(e) => setDraft((d) => ({ ...d, clientRequestLimit: e.target.value }))}
+            placeholder="0 = unlimited"
+            className="h-8 w-32"
+          />
+        </div>
         <div className="ml-auto flex items-end gap-2">
           <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={createMutation.isPending}>
             Cancel
@@ -260,7 +304,8 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
 
 /**
  * Per-tenant B2B subscription tiers (Standard/Pro/Max are placeholders) — each tier's fee, the AI
- * usage it includes for the whole account, and how many cases it allows. Replaces the old single
+ * usage it includes for the whole account, how many cases it allows, and how many client requests
+ * (from the client app, UK) a lawyer can take on each month. Replaces the old single
  * flat subscription plan: a tenant can now offer several tiers, and a lawyer's account is on
  * exactly one of them (chosen at signup, upgradeable later). A tier is never deleted, only hidden
  * from new signups (the eye icon toggles this) — lawyers already on it keep working.
