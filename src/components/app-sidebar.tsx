@@ -57,8 +57,8 @@ const practiceAreaSites = [
   { title: "PH", url: `${PRACTICE_AREAS_URL}/ph` },
 ]
 
-/** Each site's practice areas. Clicking it opens UK (the default) and shows both sites under it;
- * it stays open while either page is. */
+/** Each site's practice areas and client case types (tabs on the site's page). Clicking it opens
+ * UK (the default) and shows both sites under it; it stays open while any of those pages is. */
 function PracticeAreaNav({ pathname }: { pathname: string }) {
   const open = pathname.startsWith(PRACTICE_AREAS_URL)
   return (
@@ -72,7 +72,7 @@ function PracticeAreaNav({ pathname }: { pathname: string }) {
         <SidebarMenuSub>
           {practiceAreaSites.map((site) => (
             <SidebarMenuSubItem key={site.url}>
-              <SidebarMenuSubButton render={<Link href={site.url} />} isActive={pathname === site.url}>
+              <SidebarMenuSubButton render={<Link href={site.url} />} isActive={pathname === site.url || pathname.startsWith(`${site.url}/`)}>
                 <span>{site.title}</span>
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>

@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Loader2, MoreHorizontal, Pencil, Plus, Trash2 } fro
 import { toast } from "sonner"
 
 import { PracticeAreaDialog } from "@/components/practice-areas/practice-area-dialog"
+import { ListPagination, usePagination } from "@/components/list-pagination"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,17 +22,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useCaseAreasQuery } from "@/lib/case-areas/queries"
 import type { LawyerSite } from "@/lib/lawyers/queries"
 import {
   type AdminPracticeArea,
-  CASE_AREA_LABELS,
   useDeletePracticeAreaMutation,
   usePracticeAreasQuery,
   useReorderPracticeAreasMutation,
   useUpdatePracticeAreaMutation,
 } from "@/lib/practice-areas/queries"
-
-const SITE_NAMES: Record<LawyerSite, string> = { UK: "United Kingdom", PH: "Philippines" }
 
 const onError = (err: unknown) => toast.error((err as Error).message)
 
@@ -78,29 +77,34 @@ function DeleteDialog({ site, area, onClose }: { site: LawyerSite; area: AdminPr
 /**
  * One site's practice areas: what lawyers there pick on their Lawyer Application, in the order the
  * lawyer app shows them. Switching an area off hides it from the picker and from matching; lawyers
- * who hold it keep it. Only an area nobody holds can be deleted. On UK, an area's case area decides
- * which client requests reach the lawyers holding it. Every change is in the audit trail.
+ * who hold it keep it. Only an area nobody holds can be deleted. An area's client case type decides
+ * which client requests reach the lawyers holding it (UK only for now). Every change is in the audit
+ * trail.
  */
 export function PracticeAreasPage({ site }: { site: LawyerSite }) {
   const { data, isLoading, isError, error } = usePracticeAreasQuery(site)
   const update = useUpdatePracticeAreaMutation(site)
   const reorder = useReorderPracticeAreasMutation(site)
+  const paged = usePagination(data)
+  // Moving a row across a page edge follows it onto the next page.
+  const move = (areas: AdminPracticeArea[], index: number, by: -1 | 1) => {
+    reorder.mutate(moved(areas, index, by), { onError })
+    paged.setPage(paged.pageOf(index + by))
+  }
   // undefined: closed; null: adding; an area: editing it.
   const [editing, setEditing] = useState<AdminPracticeArea | null | undefined>(undefined)
   const [deleting, setDeleting] = useState<AdminPracticeArea | null>(null)
-  const uk = site === "UK"
+  const caseAreas = useCaseAreasQuery(site).data
+  const caseAreaName = (code: string) => caseAreas?.find((a) => a.code === code)?.name ?? code
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Practice areas · {SITE_NAMES[site]}</h1>
-          <p className="text-muted-foreground max-w-3xl text-sm">
-            What lawyers on the {site} site pick on their application, in this order.
-            {uk && " An area's case area decides which client requests reach the lawyers holding it; one without routes nothing."} Switching an
-            area off hides it from new picks and from matching; lawyers who hold it keep it.
-          </p>
-        </div>
+        <p className="text-muted-foreground max-w-3xl text-sm">
+          What lawyers on the {site} site pick on their application, in this order. An area&apos;s client case type decides which client requests
+          reach the lawyers holding it; one without routes nothing. Switching an area off hides it from new picks and from matching; lawyers who
+          hold it keep it.
+        </p>
         <Button onClick={() => setEditing(null)}>
           <Plus className="size-3.5" />
           Add practice area
@@ -116,7 +120,7 @@ export function PracticeAreasPage({ site }: { site: LawyerSite }) {
               <TableRow>
                 <TableHead className="w-20">Order</TableHead>
                 <TableHead>Name</TableHead>
-                {uk && <TableHead>Case area</TableHead>}
+                <TableHead>Client case type</TableHead>
                 <TableHead className="w-24">Lawyers</TableHead>
                 <TableHead className="w-24">Active</TableHead>
                 <TableHead className="w-12">
@@ -127,94 +131,100 @@ export function PracticeAreasPage({ site }: { site: LawyerSite }) {
             <TableBody>
               {data.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={uk ? 6 : 5} className="text-muted-foreground h-20 text-center">
+                  <TableCell colSpan={6} className="text-muted-foreground h-20 text-center">
                     No practice areas on this site yet.
                   </TableCell>
                 </TableRow>
               )}
-              {data.map((area, index) => (
-                <TableRow key={area.id} className={area.isActive ? undefined : "text-muted-foreground"}>
-                  <TableCell>
-                    <div className="flex gap-0.5">
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`Move ${area.name} up`}
-                        disabled={index === 0 || reorder.isPending}
-                        onClick={() => reorder.mutate(moved(data, index, -1), { onError })}
-                      >
-                        <ArrowUp />
-                      </Button>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`Move ${area.name} down`}
-                        disabled={index === data.length - 1 || reorder.isPending}
-                        onClick={() => reorder.mutate(moved(data, index, 1), { onError })}
-                      >
-                        <ArrowDown />
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {area.name}
-                    {!area.isActive && (
-                      <Badge variant="outline" className="ml-2">
-                        Off
-                      </Badge>
-                    )}
-                  </TableCell>
-                  {uk && <TableCell>{area.caseArea ? <Badge variant="secondary">{CASE_AREA_LABELS[area.caseArea]}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>}
-                  <TableCell className="tabular-nums">{area.lawyerCount}</TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={area.isActive}
-                      disabled={update.isPending}
-                      aria-label={area.isActive ? `Switch ${area.name} off` : `Switch ${area.name} on`}
-                      onCheckedChange={(isActive) =>
-                        update.mutate(
-                          { id: area.id, patch: { isActive } },
-                          { onSuccess: () => toast.success(isActive ? `${area.name} is on` : `${area.name} is off: lawyers can't pick it now`), onError }
-                        )
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label={`Actions for ${area.name}`} />}>
-                        <MoreHorizontal />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditing(area)}>
-                          <Pencil />
-                          Edit
-                        </DropdownMenuItem>
-                        {area.lawyerCount > 0 ? (
-                          <Tooltip>
-                            <TooltipTrigger render={<div />}>
-                              <DropdownMenuItem disabled>
-                                <Trash2 />
-                                Delete
-                              </DropdownMenuItem>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {area.lawyerCount} {area.lawyerCount === 1 ? "lawyer holds" : "lawyers hold"} it. Switch it off instead.
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <DropdownMenuItem variant="destructive" onClick={() => setDeleting(area)}>
-                            <Trash2 />
-                            Delete
+              {paged.rows.map((area, i) => {
+                const index = paged.start + i
+                return (
+                  <TableRow key={area.id} className={area.isActive ? undefined : "text-muted-foreground"}>
+                    <TableCell>
+                      <div className="flex gap-0.5">
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`Move ${area.name} up`}
+                          disabled={index === 0 || reorder.isPending}
+                          onClick={() => move(data, index, -1)}
+                        >
+                          <ArrowUp />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`Move ${area.name} down`}
+                          disabled={index === data.length - 1 || reorder.isPending}
+                          onClick={() => move(data, index, 1)}
+                        >
+                          <ArrowDown />
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {area.name}
+                      {!area.isActive && (
+                        <Badge variant="outline" className="ml-2">
+                          Off
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>{area.caseArea ? <Badge variant="secondary">{caseAreaName(area.caseArea)}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell className="tabular-nums">{area.lawyerCount}</TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={area.isActive}
+                        disabled={update.isPending}
+                        aria-label={area.isActive ? `Switch ${area.name} off` : `Switch ${area.name} on`}
+                        onCheckedChange={(isActive) =>
+                          update.mutate(
+                            { id: area.id, patch: { isActive } },
+                            { onSuccess: () => toast.success(isActive ? `${area.name} is on` : `${area.name} is off: lawyers can't pick it now`), onError }
+                          )
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label={`Actions for ${area.name}`} />}>
+                          <MoreHorizontal />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setEditing(area)}>
+                            <Pencil />
+                            Edit
                           </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+                          {area.lawyerCount > 0 ? (
+                            <Tooltip>
+                              <TooltipTrigger render={<div />}>
+                                <DropdownMenuItem disabled>
+                                  <Trash2 />
+                                  Delete
+                                </DropdownMenuItem>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {area.lawyerCount} {area.lawyerCount === 1 ? "lawyer holds" : "lawyers hold"} it. Switch it off instead.
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <DropdownMenuItem variant="destructive" onClick={() => setDeleting(area)}>
+                              <Trash2 />
+                              Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </div>
+      )}
+      {data && data.length > 0 && (
+        <ListPagination total={paged.total} itemLabel="practice area" page={paged.page} pageCount={paged.pageCount} onPageChange={paged.setPage} />
       )}
 
       {editing !== undefined && <PracticeAreaDialog site={site} area={editing} onClose={() => setEditing(undefined)} />}

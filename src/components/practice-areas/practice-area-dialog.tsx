@@ -9,35 +9,34 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useCaseAreasQuery } from "@/lib/case-areas/queries"
 import type { LawyerSite } from "@/lib/lawyers/queries"
-import {
-  type AdminPracticeArea,
-  CASE_AREA_LABELS,
-  CASE_AREAS,
-  type CaseArea,
-  useCreatePracticeAreaMutation,
-  useUpdatePracticeAreaMutation,
-} from "@/lib/practice-areas/queries"
+import { type AdminPracticeArea, useCreatePracticeAreaMutation, useUpdatePracticeAreaMutation } from "@/lib/practice-areas/queries"
 
 /** The API's limit (PRACTICE_AREA_NAME_MAX_LENGTH). */
 const NAME_MAX = 100
 /** Base UI's Select needs a string value for "no case area". */
 const NONE = "NONE"
-const CASE_AREA_ITEMS = [{ value: NONE, label: "None (doesn't route requests)" }, ...CASE_AREAS.map((a) => ({ value: a, label: CASE_AREA_LABELS[a] }))]
 
 /**
- * Adding a practice area to a site, or editing one: its name and, on UK, the client case area it
- * routes. Mounted only while open, so each opening starts from the area as saved.
+ * Adding a practice area to a site, or editing one: its name and the client case type it routes. Mounted only while open, so each opening starts from the area as saved.
  */
 export function PracticeAreaDialog({ site, area, onClose }: { site: LawyerSite; area: AdminPracticeArea | null; onClose: () => void }) {
   const [name, setName] = useState(area?.name ?? "")
   const [caseArea, setCaseArea] = useState<string>(area?.caseArea ?? NONE)
+  const caseAreas = useCaseAreasQuery(site).data
+  // Every case area, switched-off ones too: an area may keep or take one that's off.
+  const caseAreaItems = [
+    { value: NONE, label: "None (doesn't route requests)" },
+    ...(caseAreas?.map((a) => ({ value: a.code, label: a.isActive ? a.name : `${a.name} (off)` })) ??
+      (area?.caseArea ? [{ value: area.caseArea, label: area.caseArea }] : [])),
+  ]
   const create = useCreatePracticeAreaMutation(site)
   const update = useUpdatePracticeAreaMutation(site)
   const pending = create.isPending || update.isPending
 
   const trimmed = name.trim()
-  const fields = { name: trimmed, caseArea: site === "UK" && caseArea !== NONE ? (caseArea as CaseArea) : null }
+  const fields = { name: trimmed, caseArea: caseArea !== NONE ? caseArea : null }
   const changed = !area || trimmed !== area.name || fields.caseArea !== area.caseArea
   const canSave = trimmed !== "" && changed && !pending
 
@@ -76,27 +75,25 @@ export function PracticeAreaDialog({ site, area, onClose }: { site: LawyerSite; 
             <Label htmlFor="practice-area-name">Name</Label>
             <Input id="practice-area-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={NAME_MAX} placeholder="e.g. Employment Law" autoFocus />
           </div>
-          {site === "UK" && (
-            <div className="flex flex-col gap-2">
-              <Label>Routes client requests about</Label>
-              <Select items={CASE_AREA_ITEMS} value={caseArea} onValueChange={(value) => setCaseArea(value as string)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CASE_AREA_ITEMS.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-muted-foreground text-xs">
-                The kind of case a client picks in the client app. Lawyers holding this area get those requests. Personal injury is never
-                routed: referral fees are banned there.
-              </p>
-            </div>
-          )}
+          <div className="flex flex-col gap-2">
+            <Label>Client case type</Label>
+            <Select items={caseAreaItems} value={caseArea} onValueChange={(value) => setCaseArea(value as string)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {caseAreaItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-xs">
+              The kind of case a client picks in the client app. Lawyers holding this area get those requests. Personal injury is never
+              routed: referral fees are banned there.
+            </p>
+          </div>
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>Cancel</DialogClose>
             <Button type="submit" disabled={!canSave}>

@@ -1,14 +1,14 @@
 "use client"
 
-import { notFound, useParams } from "next/navigation"
+import { useParams } from "next/navigation"
 
 import { PracticeAreasPage } from "@/components/practice-areas/practice-areas-page"
-import { LAWYER_SITES, type LawyerSite } from "@/lib/lawyers/queries"
+import type { LawyerSite } from "@/lib/lawyers/queries"
 
-/** /dashboard/practice-areas/uk and /ph: one site's list, picked from the sidebar. */
+/** /dashboard/practice-areas/uk and /ph: one site's list, picked from the sidebar. The layout has
+ * checked the site. */
 export default function PracticeAreasSitePage() {
-  const site = useParams<{ site: string }>().site.toUpperCase()
-  if (!(LAWYER_SITES as readonly string[]).includes(site)) notFound()
+  const site = useParams<{ site: string }>().site.toUpperCase() as LawyerSite
   // Keyed so switching site starts with closed dialogs.
-  return <PracticeAreasPage key={site} site={site as LawyerSite} />
+  return <PracticeAreasPage key={site} site={site} />
 }
