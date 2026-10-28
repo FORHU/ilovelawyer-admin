@@ -32,7 +32,7 @@ function ClientPricingSection() {
                 <ClientCasePricingCard key={`${tenant.code}-${tenant.case.updatedAt}`} pricing={{ ...tenant, currencies: data.currencies }} row={tenant.case} />
               ) : (
                 <p key={tenant.code} className="text-destructive text-sm">
-                  {tenant.code} has no case price. Run the API&apos;s migrations or tenant seeder.
+                  {tenant.code} has no new-case credits. Run the API&apos;s migrations or tenant seeder.
                 </p>
               )
             )}
