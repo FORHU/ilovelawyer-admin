@@ -63,8 +63,9 @@ export interface PhRegistration {
 export interface AdminLawyerProfile {
   country: LawyerSite
   registration: UkRegistration | PhRegistration
-  /** The site's practice areas (UK: EMPLOYMENT, PROPERTY, ...; PH: CIVIL, LABOR, ...). */
-  practiceAreas: string[]
+  /** From the site's list (the Practice Area pages), in its order. isActive false: switched off
+   * since the lawyer picked it. */
+  practiceAreas: { id: string; name: string; isActive: boolean }[]
   bio: string
   languages: string[]
   verification: {

@@ -146,6 +146,23 @@ const phColumns: ColumnDef<AdminLawyerVerificationRow>[] = [
 
 const tailColumns: ColumnDef<AdminLawyerVerificationRow>[] = [
   {
+    id: "practiceAreas",
+    header: "Practice areas",
+    cell: ({ row }) => {
+      const areas = row.original.profile.practiceAreas
+      if (!areas.length) return none
+      return (
+        <div className="flex max-w-65 flex-wrap gap-1">
+          {areas.map((area) => (
+            <Badge key={area.id} variant="outline" className={area.isActive ? undefined : "text-muted-foreground line-through"} title={area.isActive ? undefined : "Switched off"}>
+              {area.name}
+            </Badge>
+          ))}
+        </div>
+      )
+    },
+  },
+  {
     accessorKey: "submittedAt",
     header: "Submitted",
     cell: ({ row }) => {
