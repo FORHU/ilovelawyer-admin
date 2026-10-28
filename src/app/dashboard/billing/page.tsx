@@ -93,7 +93,7 @@ export default function BillingPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
         <p className="text-muted-foreground text-sm">
-          What clients pay in the client app: case fees and chat credit top-ups. Lawyers&apos; per-case fees aren&apos;t here.{" "}
+          What clients pay in the client app: chat credit top-ups (cases are free; older case fees still show here). Lawyers&apos; per-case fees aren&apos;t here.{" "}
           <Badge variant="outline">Dummy</Badge> payments are test money from before Stripe: no money changed hands, so pick
           Provider = Stripe to see real revenue.
         </p>

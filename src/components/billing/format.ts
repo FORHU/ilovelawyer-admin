@@ -14,7 +14,7 @@ export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
 }
 
-export const KIND_LABELS: Record<PaymentKind, string> = { CASE: "Case fee", TOP_UP: "Top-up" }
+export const KIND_LABELS: Record<PaymentKind, string> = { CASE: "Case fee (legacy)", TOP_UP: "Top-up" }
 
 export const PROVIDER_LABELS: Record<PaymentProvider, string> = { STRIPE: "Stripe", DUMMY: "Dummy", FREE: "Free (promo)" }
 

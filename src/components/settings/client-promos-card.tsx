@@ -27,7 +27,7 @@ interface Draft {
   description: string
   discount: string
   currency: string
-  firstCaseOnly: boolean
+  firstTopUpOnly: boolean
   oncePerClient: boolean
   /** yyyy-mm-dd, or "" for no expiry. The code stops working at the start of that day (UTC). */
   expiresOn: string
@@ -40,7 +40,7 @@ function draftFrom(promo: ClientPromo, pricing: ClientPricing): Draft {
     description: promo.description,
     discount: toMajor(promo.discountMinor, currency),
     currency: promo.currency,
-    firstCaseOnly: promo.firstCaseOnly,
+    firstTopUpOnly: promo.firstTopUpOnly,
     oncePerClient: promo.oncePerClient,
     expiresOn: promo.expiresAt ? promo.expiresAt.slice(0, 10) : "",
     maxRedemptions: promo.maxRedemptions === null ? "" : String(promo.maxRedemptions),
@@ -58,7 +58,7 @@ function parse(draft: Draft, pricing: ClientPricing): Omit<PromoFields, "isActiv
     description: draft.description.trim(),
     discountMinor,
     currency: draft.currency,
-    firstCaseOnly: draft.firstCaseOnly,
+    firstTopUpOnly: draft.firstTopUpOnly,
     oncePerClient: draft.oncePerClient,
     expiresAt: draft.expiresOn ? new Date(`${draft.expiresOn}T00:00:00Z`).toISOString() : null,
     maxRedemptions: max,
@@ -71,7 +71,7 @@ function PromoFieldsEditor({ draft, setDraft, pricing }: { draft: Draft; setDraf
   const currency = pricing.currencies.find((c) => c.code === draft.currency)
   return (
     <>
-      <Input value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Shown to the client, e.g. $5 off your first case" className="h-8" aria-label="Description" />
+      <Input value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Shown to the client, e.g. $5 off your first top-up" className="h-8" aria-label="Description" />
       <div className="flex flex-wrap gap-4">
         <CurrencySelect value={draft.currency} currencies={pricing.currencies} onChange={(c) => setDraft((d) => ({ ...d, currency: c }))} />
         <AmountField label="Discount" value={draft.discount} currency={currency} allowZero={false} onChange={(discount) => setDraft((d) => ({ ...d, discount }))} />
@@ -86,8 +86,8 @@ function PromoFieldsEditor({ draft, setDraft, pricing }: { draft: Draft; setDraf
       </div>
       <div className="flex flex-wrap gap-4">
         <Label className="flex items-center gap-2 text-sm font-normal">
-          <Checkbox checked={draft.firstCaseOnly} onCheckedChange={(v) => setDraft((d) => ({ ...d, firstCaseOnly: v === true }))} />
-          First case only
+          <Checkbox checked={draft.firstTopUpOnly} onCheckedChange={(v) => setDraft((d) => ({ ...d, firstTopUpOnly: v === true }))} />
+          First top-up only
         </Label>
         <Label className="flex items-center gap-2 text-sm font-normal">
           <Checkbox checked={draft.oncePerClient} onCheckedChange={(v) => setDraft((d) => ({ ...d, oncePerClient: v === true }))} />
@@ -155,8 +155,8 @@ function AddPromoRow({ pricing }: { pricing: ClientPricing }) {
   const empty: Draft = {
     description: "",
     discount: "",
-    currency: pricing.case?.currency ?? pricing.currencies[0]?.code ?? "USD",
-    firstCaseOnly: false,
+    currency: (pricing.packs.find((p) => p.isDefault) ?? pricing.packs[0])?.currency ?? pricing.currencies[0]?.code ?? "USD",
+    firstTopUpOnly: false,
     oncePerClient: true,
     expiresOn: "",
     maxRedemptions: "",
@@ -211,8 +211,8 @@ function AddPromoRow({ pricing }: { pricing: ClientPricing }) {
 }
 
 /**
- * One tenant's promo codes: what a client in that tenant can enter when paying for a new case. A code only applies when its currency
- * matches the case price's. Codes are never deleted (past payments name them), only turned off.
+ * One tenant's promo codes: what a client in that tenant can enter when buying a chat-credit top-up. A code only applies when its currency
+ * matches the pack's. Codes are never deleted (past payments name them), only turned off.
  */
 export function ClientPromosCard({ pricing }: { pricing: ClientPricing }) {
   return (
@@ -224,7 +224,7 @@ export function ClientPromosCard({ pricing }: { pricing: ClientPricing }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
-        <p className="text-muted-foreground">Money off a new case, for clients in {pricing.name}. Uses count paid payments and ones still at checkout.</p>
+        <p className="text-muted-foreground">Money off a chat-credit top-up, for clients in {pricing.name}, in the packs&apos; currency. Uses count paid payments (old case payments included) and ones still at checkout.</p>
         {pricing.promos.length === 0 && <p className="text-muted-foreground text-sm">No promo codes yet.</p>}
         {pricing.promos.map((promo) => (
           <PromoRow key={promo.id} pricing={pricing} promo={promo} />

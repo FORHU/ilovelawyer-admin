@@ -39,7 +39,7 @@ export interface ClientPromo {
   description: string
   discountMinor: number
   currency: string
-  firstCaseOnly: boolean
+  firstTopUpOnly: boolean
   oncePerClient: boolean
   expiresAt: string | null
   maxRedemptions: number | null
@@ -85,8 +85,9 @@ function useInvalidatingMutation<V>(mutationFn: (vars: V) => Promise<unknown>) {
 const send = (path: string, method: string, body?: unknown) =>
   apiFetch<unknown>(`${BASE}${path}`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
 
+// Cases are free: only the credits a new case starts with.
 export const useUpdateClientCaseMutation = () =>
-  useInvalidatingMutation(({ code, patch }: { code: TenantCode; patch: Partial<Omit<PackFields, "name">> }) =>
+  useInvalidatingMutation(({ code, patch }: { code: TenantCode; patch: { credits: number } }) =>
     send(`/tenants/${code}/client-pricing/case`, "PATCH", patch)
   )
 
