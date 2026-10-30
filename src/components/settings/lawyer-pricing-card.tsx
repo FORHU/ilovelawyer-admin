@@ -34,7 +34,8 @@ function IntroFee({ tenant, fee, currency }: { tenant: LawyerTenantPricing; fee:
   return (
     <div className="flex flex-col gap-2">
       <p className="text-muted-foreground">
-        What a lawyer in {tenant.name} pays when a client confirms them. It also comes with the engagement&apos;s included AI budget.
+        What a lawyer in {tenant.name} paid when a client confirmed them, before clients paid quotes through ilovelawyer. Only requests confirmed back then are still
+        charged it.
       </p>
       <div className="flex flex-wrap items-end gap-3">
         <AmountField label={`Introduction fee (${currency.code})`} value={price} currency={currency} onChange={setPrice} allowZero={false} />
