@@ -10,6 +10,8 @@ import { useAdminSettingsQuery } from "@/lib/settings/queries"
 import { useClientPricingQuery } from "@/lib/settings/client-pricing"
 import { LawyerPricingCard } from "@/components/settings/lawyer-pricing-card"
 import { lawyerCurrency, useLawyerPricingQuery } from "@/lib/settings/lawyer-pricing"
+import { PayoutSettingsCard } from "@/components/settings/payout-settings-card"
+import { usePayoutSettingsQuery } from "@/lib/settings/payout-settings"
 
 /** The client app's prices, per tenant like the subscription tiers: a client pays their own
  * tenant's. Each card is keyed on its rows' updatedAt so a change saved anywhere re-seeds its draft
@@ -68,7 +70,8 @@ function LawyerPricingSection() {
       <div>
         <h2 className="text-lg font-semibold tracking-tight">Lawyer fees</h2>
         <p className="text-muted-foreground text-sm">
-          What lawyers pay when a client confirms them, and for more AI on an engaged case. Changes reach the next charge within about a minute.
+          What lawyers pay for more AI on an engaged case. The introduction fee is only charged on requests clients confirmed before quote payments. Changes reach the
+          next charge within about a minute.
         </p>
       </div>
       {isLoading && <p className="text-muted-foreground text-sm">Loading lawyer fees…</p>}
@@ -81,6 +84,32 @@ function LawyerPricingSection() {
               tenant={tenant}
               currency={lawyerCurrency(data)}
             />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** How clients pay lawyers' quotes, per tenant (PayoutSettingsSvc): the platform fee on top, the hold
+ * on the lawyer's fee, and the minimum withdrawal. Keyed on updatedAt, like the sections above. */
+function PayoutSettingsSection() {
+  const { data, isLoading, isError, error } = usePayoutSettingsQuery()
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight">Quote payments</h2>
+        <p className="text-muted-foreground text-sm">
+          The platform fee clients pay on top of a lawyer&apos;s quote, and when lawyers can withdraw their fee. A sent quote keeps its fee; changes reach new quotes and
+          withdrawals within about a minute.
+        </p>
+      </div>
+      {isLoading && <p className="text-muted-foreground text-sm">Loading quote payment settings…</p>}
+      {isError && <p className="text-destructive text-sm">{(error as Error).message}</p>}
+      {data && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {data.tenants.map((tenant) => (
+            <PayoutSettingsCard key={`${tenant.code}-${tenant.updatedAt}`} tenant={tenant} limits={data.limits} />
           ))}
         </div>
       )}
@@ -128,6 +157,7 @@ export default function SettingsPage() {
         </>
       )}
       <ClientPricingSection />
+      <PayoutSettingsSection />
       <LawyerPricingSection />
     </div>
   )
