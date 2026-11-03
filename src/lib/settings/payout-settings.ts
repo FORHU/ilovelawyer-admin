@@ -26,6 +26,19 @@ export interface PayoutSettingsResponse {
 
 export type PayoutSettingsPatch = Partial<Pick<PayoutTerms, "platformFeeBps" | "minPlatformFeeMinor" | "earningsHoldDays" | "minWithdrawalMinor">>
 
+/** The platform fee on a service fee, as ilovelawyer-api's platformFeeOf (payout.constants.ts) works it
+ * out: `platformFeeBps` of it rounded half-up, never below the minimum, none on a free quote. For the
+ * settings preview; keep it in step with the API's. */
+export function platformFeeOf(serviceFeeMinor: number, platformFeeBps: number, minPlatformFeeMinor: number): number {
+  if (serviceFeeMinor <= 0) return 0
+  return Math.max(Math.floor((serviceFeeMinor * platformFeeBps + 5000) / 10000), minPlatformFeeMinor)
+}
+
+/** How many decimals a currency's amounts have (2 for GBP and PHP), for the settings' minor units. */
+export function currencyExponent(code: string): number {
+  return new Intl.NumberFormat("en", { style: "currency", currency: code }).resolvedOptions().maximumFractionDigits ?? 2
+}
+
 const queryKey = ["admin", "payout-settings"] as const
 
 export function usePayoutSettingsQuery() {

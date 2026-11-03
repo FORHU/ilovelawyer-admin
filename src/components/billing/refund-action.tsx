@@ -19,18 +19,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { formatMoney, KIND_LABELS, refundBlockedReason } from "@/components/billing/format"
+import { formatMoney, KIND_LABELS, REFUND_REASON_MAX, refundAmountToMinor, refundBlockedReason } from "@/components/billing/format"
 import { type AdminClientPayment, useRefundPaymentMutation } from "@/lib/billing/queries"
-
-const REASON_MAX = 500
-
-/** "12.5" -> 1250; null for anything that isn't a positive amount with at most two decimals. */
-function toMinor(input: string): number | null {
-  const trimmed = input.trim()
-  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null
-  const minor = Math.round(Number(trimmed) * 100)
-  return minor > 0 ? minor : null
-}
 
 /**
  * Refund for one payment row: a disabled button with the reason on hover when it can't be refunded
@@ -60,7 +50,7 @@ export function RefundAction({ payment }: { payment: AdminClientPayment }) {
   }
 
   const left = payment.refundable
-  const amountMinor = toMinor(amount)
+  const amountMinor = refundAmountToMinor(amount)
   const amountError =
     amount.trim() === "" ? null : amountMinor === null ? "Enter an amount like 4.99" : amountMinor > left.amountMinor ? `At most ${formatMoney(left)}` : null
   const canReview = amountMinor !== null && !amountError && reason.trim().length > 0
@@ -134,7 +124,7 @@ export function RefundAction({ payment }: { payment: AdminClientPayment }) {
                 placeholder="e.g. Client asked within 14 days"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                maxLength={REASON_MAX}
+                maxLength={REFUND_REASON_MAX}
               />
             </div>
             <DialogFooter>

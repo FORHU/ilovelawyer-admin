@@ -26,7 +26,9 @@ function PaymentsCard() {
   const [page, setPage] = React.useState(1)
   const [all, setAll] = React.useState(false)
   const { data, isLoading, isError, error } = useQuotationPaymentsQuery(page, all)
-  const rows = data?.data ?? []
+  // No rows on a failed fetch: the previous page's, kept while loading, would sit under this page's
+  // number and could be refunded by mistake.
+  const rows = isError ? [] : (data?.data ?? [])
   const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / QUOTE_PAYMENTS_PAGE_SIZE))
 
   return (
@@ -50,7 +52,7 @@ function PaymentsCard() {
         </div>
         {isLoading && <p className="text-muted-foreground text-sm">Loading payments…</p>}
         {isError && <p className="text-destructive text-sm">{(error as Error).message}</p>}
-        {data && rows.length === 0 && <p className="text-muted-foreground text-sm">No quote payments yet.</p>}
+        {data && !isError && rows.length === 0 && <p className="text-muted-foreground text-sm">No quote payments yet.</p>}
         {rows.length > 0 && (
           <div className="overflow-x-auto">
             <Table>
@@ -73,7 +75,17 @@ function PaymentsCard() {
                     <TableCell className="text-right tabular-nums">{formatMoney(p.amount)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(p.serviceFee)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(p.platformFee)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{p.refunded.amountMinor ? formatMoney(p.refunded) : "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      <div className="flex flex-col items-end gap-1">
+                        <span>{p.refunded.amountMinor ? formatMoney(p.refunded) : "—"}</span>
+                        {p.refundPending.amountMinor > 0 && <Badge variant="outline">Refund pending {formatMoney(p.refundPending)}</Badge>}
+                        {p.refunds[0]?.status === "FAILED" && (
+                          <Badge variant="outline" className="text-destructive" title={p.refunds[0].failureReason ?? undefined}>
+                            Last refund failed
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Badge variant={p.status === "SUCCEEDED" ? "default" : "outline"}>{STATUS_LABELS[p.status]}</Badge>
@@ -100,7 +112,7 @@ function PaymentsCard() {
 function WalletsCard() {
   const [page, setPage] = React.useState(1)
   const { data, isLoading, isError, error } = useWalletsQuery(page)
-  const rows = data?.data ?? []
+  const rows = isError ? [] : (data?.data ?? [])
   const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / QUOTE_PAYMENTS_PAGE_SIZE))
 
   return (
@@ -111,7 +123,7 @@ function WalletsCard() {
       <CardContent className="flex flex-col gap-3">
         {isLoading && <p className="text-muted-foreground text-sm">Loading wallets…</p>}
         {isError && <p className="text-destructive text-sm">{(error as Error).message}</p>}
-        {data && rows.length === 0 && <p className="text-muted-foreground text-sm">No wallets yet. One is made when a firm or lawyer is first paid.</p>}
+        {data && !isError && rows.length === 0 && <p className="text-muted-foreground text-sm">No wallets yet. One is made when a firm or lawyer is first paid.</p>}
         {rows.length > 0 && (
           <div className="overflow-x-auto">
             <Table>

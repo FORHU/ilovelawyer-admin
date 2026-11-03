@@ -9,10 +9,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { type PayoutSettingsPatch, type PayoutSettingsResponse, useUpdatePayoutSettingsMutation } from "@/lib/settings/payout-settings"
+import { formatDateTime, formatMoney } from "@/components/billing/format"
+import { toMajor, toMinor } from "@/lib/settings/client-pricing"
+import { currencyExponent, platformFeeOf, type PayoutSettingsPatch, type PayoutSettingsResponse, useUpdatePayoutSettingsMutation } from "@/lib/settings/payout-settings"
 
 type Tenant = PayoutSettingsResponse["tenants"][number]
 type Limits = PayoutSettingsResponse["limits"]
+type Unit = { exponent: number }
 
 interface Draft {
   ratePercent: string
@@ -21,21 +24,22 @@ interface Draft {
   minWithdrawal: string
 }
 
-const pounds = (minor: number) => (minor / 100).toFixed(2)
+/** A £600 quote (in the tenant's currency) for the fee preview. */
+const EXAMPLE_FEE_MINOR = 60000
 
-function draftOf(tenant: Tenant): Draft {
+function draftOf(tenant: Tenant, unit: Unit): Draft {
   const s = tenant.settings
-  return { ratePercent: String(s.platformFeeBps / 100), minFee: pounds(s.minPlatformFeeMinor), holdDays: String(s.earningsHoldDays), minWithdrawal: pounds(s.minWithdrawalMinor) }
+  return { ratePercent: String(s.platformFeeBps / 100), minFee: toMajor(s.minPlatformFeeMinor, unit), holdDays: String(s.earningsHoldDays), minWithdrawal: toMajor(s.minWithdrawalMinor, unit) }
 }
 
 /** The draft as the API's whole-number fields; NaN where a field isn't a number. */
-function parse(draft: Draft) {
+function parse(draft: Draft, unit: Unit) {
   const num = (v: string) => (v.trim() === "" ? NaN : Number(v))
   return {
     platformFeeBps: Math.round(num(draft.ratePercent) * 100),
-    minPlatformFeeMinor: Math.round(num(draft.minFee) * 100),
+    minPlatformFeeMinor: toMinor(draft.minFee, unit),
     earningsHoldDays: num(draft.holdDays),
-    minWithdrawalMinor: Math.round(num(draft.minWithdrawal) * 100),
+    minWithdrawalMinor: toMinor(draft.minWithdrawal, unit),
   }
 }
 
@@ -62,9 +66,12 @@ function Field({ id, label, hint, value, invalid, onChange }: { id: string; labe
  * reach new quotes and withdrawals within about a minute. Audited.
  */
 export function PayoutSettingsCard({ tenant, limits }: { tenant: Tenant; limits: Limits }) {
-  const [draft, setDraft] = useState<Draft>(() => draftOf(tenant))
+  const currency = tenant.settings.currency
+  const unit = { exponent: currencyExponent(currency) }
+  const money = (amountMinor: number) => formatMoney({ amountMinor, currency })
+  const [draft, setDraft] = useState<Draft>(() => draftOf(tenant, unit))
   const mutation = useUpdatePayoutSettingsMutation()
-  const parsed = parse(draft)
+  const parsed = parse(draft, unit)
   const valid = {
     platformFeeBps: within(parsed.platformFeeBps, limits.platformFeeBps),
     minPlatformFeeMinor: within(parsed.minPlatformFeeMinor, limits.minPlatformFeeMinor),
@@ -76,7 +83,7 @@ export function PayoutSettingsCard({ tenant, limits }: { tenant: Tenant; limits:
   )
   const dirty = Object.keys(patch).length > 0
   const allValid = Object.values(valid).every(Boolean)
-  const exampleFee = Math.max(Math.floor((60000 * parsed.platformFeeBps + 5000) / 10000), parsed.minPlatformFeeMinor)
+  const exampleFee = platformFeeOf(EXAMPLE_FEE_MINOR, parsed.platformFeeBps, parsed.minPlatformFeeMinor)
 
   return (
     <Card>
@@ -102,8 +109,8 @@ export function PayoutSettingsCard({ tenant, limits }: { tenant: Tenant; limits:
           />
           <Field
             id={`fee-min-${tenant.code}`}
-            label={`Minimum platform fee (${tenant.settings.currency})`}
-            hint="Free quotes have none"
+            label={`Minimum platform fee (${currency})`}
+            hint={`${money(limits.minPlatformFeeMinor.min)}–${money(limits.minPlatformFeeMinor.max)} · free quotes have none`}
             value={draft.minFee}
             invalid={!valid.minPlatformFeeMinor}
             onChange={(minFee) => setDraft((d) => ({ ...d, minFee }))}
@@ -118,8 +125,8 @@ export function PayoutSettingsCard({ tenant, limits }: { tenant: Tenant; limits:
           />
           <Field
             id={`min-withdrawal-${tenant.code}`}
-            label={`Minimum withdrawal (${tenant.settings.currency})`}
-            hint={`At least ${pounds(limits.minWithdrawalMinor.min)}`}
+            label={`Minimum withdrawal (${currency})`}
+            hint={`${money(limits.minWithdrawalMinor.min)}–${money(limits.minWithdrawalMinor.max)}`}
             value={draft.minWithdrawal}
             invalid={!valid.minWithdrawalMinor}
             onChange={(minWithdrawal) => setDraft((d) => ({ ...d, minWithdrawal }))}
@@ -127,12 +134,13 @@ export function PayoutSettingsCard({ tenant, limits }: { tenant: Tenant; limits:
         </div>
         {valid.platformFeeBps && valid.minPlatformFeeMinor && (
           <p className="bg-muted rounded-xl px-3 py-2 text-sm tabular-nums">
-            A £600.00 quote: the client pays £{pounds(60000 + exampleFee)}, the lawyer receives £600.00, ilovelawyer keeps £{pounds(exampleFee)}.
+            A {money(EXAMPLE_FEE_MINOR)} quote: the client pays {money(EXAMPLE_FEE_MINOR + exampleFee)}, the lawyer receives {money(EXAMPLE_FEE_MINOR)}, ilovelawyer keeps{" "}
+            {money(exampleFee)}.
           </p>
         )}
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground text-xs">
-            {tenant.updatedAt ? `Last changed ${new Date(tenant.updatedAt).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "Defaults · not changed yet"}
+            {tenant.updatedAt ? `Last changed ${formatDateTime(tenant.updatedAt)}` : "Defaults · not changed yet"}
           </span>
           <Button
             size="sm"

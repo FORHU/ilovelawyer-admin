@@ -10,19 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { formatMoney } from "@/components/billing/format"
-import { type AdminQuotationPayment, refundable, useRefundQuotationPaymentMutation } from "@/lib/billing/quotation-payments"
-
-const REASON_MAX = 500
-const REFUNDABLE = new Set(["SUCCEEDED", "PARTIALLY_REFUNDED", "DISPUTED"])
-
-/** "12.5" -> 1250; null for anything that isn't a positive amount with at most two decimals. */
-function toMinor(input: string): number | null {
-  const trimmed = input.trim()
-  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null
-  const minor = Math.round(Number(trimmed) * 100)
-  return minor > 0 ? minor : null
-}
+import { formatMoney, quotationRefundBlockedReason, REFUND_REASON_MAX, refundAmountToMinor } from "@/components/billing/format"
+import { type AdminQuotationPayment, useRefundQuotationPaymentMutation } from "@/lib/billing/quotation-payments"
 
 /**
  * Refund for one quote payment. Everything left gives back the platform fee too; anything less is a
@@ -37,9 +26,11 @@ export function QuotationRefundAction({ payment }: { payment: AdminQuotationPaym
   const [amount, setAmount] = useState("")
   const [reason, setReason] = useState("")
 
-  const left = refundable(payment)
+  // What the API would allow now, worked out by it (pending refunds hold their share back).
+  const left = { amountMinor: payment.refundable.amountMinor, serviceFeeMinor: payment.refundableServiceFee.amountMinor }
   const currency = payment.amount.currency
-  if (!REFUNDABLE.has(payment.status) || left.amountMinor <= 0) {
+  const blocked = quotationRefundBlockedReason(payment)
+  if (blocked) {
     return (
       <Tooltip>
         <TooltipTrigger render={<span className="inline-flex cursor-help" />}>
@@ -47,14 +38,12 @@ export function QuotationRefundAction({ payment }: { payment: AdminQuotationPaym
             Refund
           </Button>
         </TooltipTrigger>
-        <TooltipContent className="max-w-xs whitespace-normal">
-          {payment.status === "REFUNDED" || left.amountMinor <= 0 ? "Already refunded in full." : "Only a payment that took money can be refunded."}
-        </TooltipContent>
+        <TooltipContent className="max-w-xs whitespace-normal">{blocked}</TooltipContent>
       </Tooltip>
     )
   }
 
-  const amountMinor = toMinor(amount)
+  const amountMinor = refundAmountToMinor(amount)
   const full = amountMinor === left.amountMinor
   const amountError =
     amount.trim() === ""
@@ -74,7 +63,13 @@ export function QuotationRefundAction({ payment }: { payment: AdminQuotationPaym
       { paymentId: payment.id, amountMinor: full ? undefined : amountMinor!, currency, reason: reason.trim() },
       {
         onSuccess: (updated) => {
+          // Refunds come newest first. Only a SUCCEEDED one is a refund made.
           const latest = updated.refunds[0]
+          if (latest?.status === "FAILED") {
+            toast.error(latest.failureReason ?? "Stripe refused the refund. Nothing was refunded.")
+            setStep("form")
+            return
+          }
           if (latest?.status === "PENDING") toast.success(`Refund of ${formatMoney(refundMoney)} sent to Stripe; it will show as done once Stripe finishes it`)
           else toast.success(`Refunded ${formatMoney(refundMoney)}`)
           setOpen(false)
@@ -128,7 +123,7 @@ export function QuotationRefundAction({ payment }: { payment: AdminQuotationPaym
                 placeholder="e.g. The lawyer couldn't take the matter on"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                maxLength={REASON_MAX}
+                maxLength={REFUND_REASON_MAX}
               />
             </div>
             <DialogFooter>

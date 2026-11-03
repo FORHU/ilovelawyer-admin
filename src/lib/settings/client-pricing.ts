@@ -113,13 +113,13 @@ export const useUpdateClientPromoMutation = () =>
   useInvalidatingMutation(({ id, patch }: { id: string; patch: Partial<PromoFields> }) => send(`/client-promos/${id}`, "PATCH", patch))
 
 /** "9.99" for 999 cents; "50" for 50 yen. */
-export function toMajor(amountMinor: number, currency: ClientCurrency | undefined): string {
+export function toMajor(amountMinor: number, currency: Pick<ClientCurrency, "exponent"> | undefined): string {
   const exponent = currency?.exponent ?? 2
   return (amountMinor / 10 ** exponent).toFixed(exponent)
 }
 
 /** The smallest-unit amount an admin typed in major units, or NaN. */
-export function toMinor(major: string, currency: ClientCurrency | undefined): number {
+export function toMinor(major: string, currency: Pick<ClientCurrency, "exponent"> | undefined): number {
   const n = Number(major)
   if (major.trim() === "" || !Number.isFinite(n)) return NaN
   return Math.round(n * 10 ** (currency?.exponent ?? 2))

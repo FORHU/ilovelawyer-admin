@@ -30,6 +30,12 @@ export interface AdminQuotationPayment {
   serviceFee: Money
   platformFee: Money
   refunded: Money
+  /** On its way at Stripe: refunds still PENDING. */
+  refundPending: Money
+  /** What a refund may take now, and of that the lawyer's part (a partial refund can't go past it).
+   * Worked out by the API the way it checks a refund; 0 for a disputed or fully refunded payment. */
+  refundable: Money
+  refundableServiceFee: Money
   provider: "STRIPE" | "DUMMY"
   paymentIntentId: string | null
   failureReason: string | null
@@ -92,12 +98,4 @@ export function useRefundQuotationPaymentMutation() {
       }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: keys.all }),
   })
-}
-
-/** What's left to refund, and of that, the lawyer's part (a partial refund can't go past it). */
-export function refundable(payment: AdminQuotationPayment) {
-  const done = payment.refunds.filter((r) => r.status !== "FAILED")
-  const amount = payment.amount.amountMinor - done.reduce((sum, r) => sum + r.amount.amountMinor, 0)
-  const serviceFee = payment.serviceFee.amountMinor - done.reduce((sum, r) => sum + r.serviceFee.amountMinor, 0)
-  return { amountMinor: amount, serviceFeeMinor: serviceFee }
 }
