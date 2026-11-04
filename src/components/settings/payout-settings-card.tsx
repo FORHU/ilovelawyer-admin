@@ -60,8 +60,8 @@ function Field({ id, label, hint, value, invalid, onChange }: { id: string; labe
 }
 
 /**
- * How quotation payments work in one tenant (PayoutSettingsSvc): the platform fee the client pays on
- * top of a lawyer's quote, how long the lawyer's fee is held before it can be withdrawn, and the
+ * How quotation payments work in one tenant (PayoutSettingsSvc): the platform fee deducted from a
+ * lawyer's quote, how long what the lawyer receives is held before it can be withdrawn, and the
  * smallest withdrawal. A quote already sent keeps its fee, an earning its release date; changes
  * reach new quotes and withdrawals within about a minute. Audited.
  */
@@ -96,7 +96,7 @@ export function PayoutSettingsCard({ tenant, limits }: { tenant: Tenant; limits:
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p className="text-muted-foreground">
-          Clients in {tenant.name} pay a lawyer&apos;s quote plus the platform fee. The lawyer receives their full fee, available to withdraw after the hold.
+          Clients in {tenant.name} pay exactly a lawyer&apos;s quote. The platform fee is deducted from it; the lawyer receives the rest, available to withdraw after the hold.
         </p>
         <div className="flex flex-wrap gap-4">
           <Field
@@ -134,8 +134,8 @@ export function PayoutSettingsCard({ tenant, limits }: { tenant: Tenant; limits:
         </div>
         {valid.platformFeeBps && valid.minPlatformFeeMinor && (
           <p className="bg-muted rounded-xl px-3 py-2 text-sm tabular-nums">
-            A {money(EXAMPLE_FEE_MINOR)} quote: the client pays {money(EXAMPLE_FEE_MINOR + exampleFee)}, the lawyer receives {money(EXAMPLE_FEE_MINOR)}, ilovelawyer keeps{" "}
-            {money(exampleFee)}.
+            A {money(EXAMPLE_FEE_MINOR)} quote: the client pays {money(EXAMPLE_FEE_MINOR)}, ilovelawyer keeps {money(exampleFee)}, the lawyer receives{" "}
+            {money(EXAMPLE_FEE_MINOR - exampleFee)}.
           </p>
         )}
         <div className="flex items-center justify-between gap-2">
