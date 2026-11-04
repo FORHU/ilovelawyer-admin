@@ -4,8 +4,9 @@ import { useAuthStore } from "@/lib/store/auth.store"
 import type { TenantCode } from "@/lib/settings/queries"
 
 // ilovelawyer-api's PayoutSettingsSvc.listForAdmin: how quotation payments work per tenant. The client
-// pays the lawyer's quote plus the platform fee (a rate, never below the minimum); the lawyer's fee
-// waits out the hold before it can be withdrawn, in amounts of at least the minimum withdrawal.
+// pays the lawyer's quote and nothing more; the platform fee (a rate, never below the minimum) is
+// deducted from it, and the rest waits out the hold before the lawyer can withdraw it, in amounts of
+// at least the minimum withdrawal.
 
 export interface PayoutTerms {
   platformFeeBps: number
@@ -26,12 +27,12 @@ export interface PayoutSettingsResponse {
 
 export type PayoutSettingsPatch = Partial<Pick<PayoutTerms, "platformFeeBps" | "minPlatformFeeMinor" | "earningsHoldDays" | "minWithdrawalMinor">>
 
-/** The platform fee on a service fee, as ilovelawyer-api's platformFeeOf (payout.constants.ts) works it
- * out: `platformFeeBps` of it rounded half-up, never below the minimum, none on a free quote. For the
- * settings preview; keep it in step with the API's. */
-export function platformFeeOf(serviceFeeMinor: number, platformFeeBps: number, minPlatformFeeMinor: number): number {
-  if (serviceFeeMinor <= 0) return 0
-  return Math.max(Math.floor((serviceFeeMinor * platformFeeBps + 5000) / 10000), minPlatformFeeMinor)
+/** The platform fee deducted from a quote, as ilovelawyer-api's platformFeeOf (payout.constants.ts)
+ * works it out: `platformFeeBps` of the quoted amount rounded half-up, never below the minimum nor
+ * above the amount, none on a free quote. For the settings preview; keep it in step with the API's. */
+export function platformFeeOf(quotedMinor: number, platformFeeBps: number, minPlatformFeeMinor: number): number {
+  if (quotedMinor <= 0) return 0
+  return Math.min(Math.max(Math.floor((quotedMinor * platformFeeBps + 5000) / 10000), minPlatformFeeMinor), quotedMinor)
 }
 
 /** How many decimals a currency's amounts have (2 for GBP and PHP), for the settings' minor units. */

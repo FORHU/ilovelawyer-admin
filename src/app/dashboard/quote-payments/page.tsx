@@ -60,7 +60,7 @@ function PaymentsCard() {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-right">Client paid</TableHead>
-                  <TableHead className="text-right">Lawyer&apos;s fee</TableHead>
+                  <TableHead className="text-right">Lawyer receives</TableHead>
                   <TableHead className="text-right">Platform fee</TableHead>
                   <TableHead className="text-right">Refunded</TableHead>
                   <TableHead>Status</TableHead>
@@ -165,15 +165,16 @@ function WalletsCard() {
   )
 }
 
-/** Clients paying lawyers' quotes through ilovelawyer: each payment split into the lawyer's fee and
- * the platform fee, with refunds; and the wallets the lawyers' fees go into before they withdraw them. */
+/** Clients paying lawyers' quotes through ilovelawyer: each payment split into what the lawyer
+ * receives and the platform fee deducted from it, with refunds; and the wallets the lawyers' share
+ * goes into before they withdraw it. */
 export default function QuotePaymentsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Quote payments</h1>
         <p className="text-muted-foreground text-sm">
-          What clients have paid for lawyers&apos; quotes. The lawyer&apos;s fee goes to their wallet; ilovelawyer keeps the platform fee. The fee and the hold are set per
+          What clients have paid for lawyers&apos; quotes. ilovelawyer deducts its platform fee; the rest goes to the lawyer&apos;s wallet. The fee and the hold are set per
           tenant in Settings.
         </p>
       </div>

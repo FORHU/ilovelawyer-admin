@@ -91,8 +91,9 @@ function LawyerPricingSection() {
   )
 }
 
-/** How clients pay lawyers' quotes, per tenant (PayoutSettingsSvc): the platform fee on top, the hold
- * on the lawyer's fee, and the minimum withdrawal. Keyed on updatedAt, like the sections above. */
+/** How clients pay lawyers' quotes, per tenant (PayoutSettingsSvc): the platform fee deducted from the
+ * quote, the hold on what the lawyer receives, and the minimum withdrawal. Keyed on updatedAt, like the
+ * sections above. */
 function PayoutSettingsSection() {
   const { data, isLoading, isError, error } = usePayoutSettingsQuery()
   return (
@@ -100,7 +101,7 @@ function PayoutSettingsSection() {
       <div>
         <h2 className="text-lg font-semibold tracking-tight">Quote payments</h2>
         <p className="text-muted-foreground text-sm">
-          The platform fee clients pay on top of a lawyer&apos;s quote, and when lawyers can withdraw their fee. A sent quote keeps its fee; changes reach new quotes and
+          The platform fee deducted from a lawyer&apos;s quote (clients pay the quote, nothing more), and when lawyers can withdraw the rest. A sent quote keeps its fee; changes reach new quotes and
           withdrawals within about a minute.
         </p>
       </div>
