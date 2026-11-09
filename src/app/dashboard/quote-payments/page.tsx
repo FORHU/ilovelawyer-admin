@@ -1,10 +1,12 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 
 import { ListPagination } from "@/components/list-pagination"
 import { QuotationRefundAction } from "@/components/billing/quotation-refund-action"
 import { formatDateTime, formatMoney } from "@/components/billing/format"
+import { EXIT_REASON_LABELS, EXIT_STATUS_LABELS } from "@/components/billing/lawyer-exit-labels"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -93,7 +95,22 @@ function PaymentsCard() {
                       </div>
                       {p.failureReason && <p className="text-muted-foreground mt-1 text-xs">{p.failureReason}</p>}
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{p.requestId.slice(0, 8)}</TableCell>
+                    <TableCell className="max-w-xs">
+                      <span className="font-mono text-xs">{p.requestId.slice(0, 8)}</span>
+                      {p.lawyerExit && (
+                        <div className="mt-1 flex flex-col gap-0.5 text-xs whitespace-normal">
+                          <Link href="/dashboard/lawyer-exits" className="font-medium underline-offset-2 hover:underline">
+                            Lawyer exit: {EXIT_STATUS_LABELS[p.lawyerExit.status].toLowerCase()}
+                          </Link>
+                          <span className="text-muted-foreground">
+                            {EXIT_REASON_LABELS[p.lawyerExit.reason]}
+                            {p.lawyerExit.claimed ? ` · claims ${formatMoney(p.lawyerExit.claimed)}` : " · no work done"}
+                          </span>
+                          {p.lawyerExit.note && <span className="text-muted-foreground break-words">{p.lawyerExit.note}</span>}
+                          {p.lawyerExit.claimNote && <span className="text-muted-foreground break-words">{p.lawyerExit.claimNote}</span>}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <QuotationRefundAction payment={p} />
                     </TableCell>

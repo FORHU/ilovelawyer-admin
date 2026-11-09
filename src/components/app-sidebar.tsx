@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, ChevronRight, Cpu, HandCoins, Loader2, LogOut, MessageSquareText, Receipt, ScrollText, Settings, ShieldCheck, Users } from "lucide-react"
+import { BookOpen, ChevronRight, Cpu, DoorOpen, HandCoins, Loader2, LogOut, MessageSquareText, Receipt, ScrollText, Settings, ShieldCheck, Users } from "lucide-react"
 
 import {
   AlertDialog,
@@ -48,6 +48,7 @@ const navItemsAfter: NavItem[] = [
   { title: "Feedback", url: "/dashboard/feedback", icon: MessageSquareText },
   { title: "Billing", url: "/dashboard/billing", icon: Receipt },
   { title: "Quote payments", url: "/dashboard/quote-payments", icon: HandCoins },
+  { title: "Lawyer exits", url: "/dashboard/lawyer-exits", icon: DoorOpen },
   { title: "LLM Usage", url: "/dashboard/llm-usage", icon: Cpu },
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ]
