@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowDown, ArrowUp, Eye, EyeOff, Loader2, Plus, Star } from "lucide-react"
+import { ArrowDown, ArrowUp, Eye, EyeOff, Plus, Star } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
+import { ConfirmPriceDialog, PackPreview, formatPrice } from "@/components/settings/confirm-price-dialog"
 import { AmountField, CreditsField, CurrencySelect, validCredits } from "@/components/settings/client-pricing-fields"
 import {
   type ClientPrice,
@@ -40,6 +41,7 @@ const onError = (err: unknown) => toast.error((err as Error).message)
 function PackRow({ pricing, pack, above, below }: { pricing: ClientPricing; pack: ClientPrice; above?: ClientPrice; below?: ClientPrice }) {
   const currency = pricing.currencies.find((c) => c.code === pack.currency)
   const [draft, setDraft] = useState<Draft>(() => ({ name: pack.name, price: toMajor(pack.priceMinor, currency), credits: String(pack.credits), currency: pack.currency }))
+  const [confirming, setConfirming] = useState(false)
   const update = useUpdateClientPackMutation()
   const setDefault = useSetDefaultClientPackMutation()
   const parsed = useParsed(draft, pricing)
@@ -50,7 +52,13 @@ function PackRow({ pricing, pack, above, below }: { pricing: ClientPricing; pack
     if (!parsed.valid) return
     update.mutate(
       { id: pack.id, patch: { name: draft.name.trim(), priceMinor: parsed.priceMinor, credits: Number(draft.credits), currency: draft.currency } },
-      { onSuccess: () => toast.success(`${draft.name.trim()} saved`), onError }
+      {
+        onSuccess: () => {
+          setConfirming(false)
+          toast.success(`${draft.name.trim()} saved`)
+        },
+        onError,
+      }
     )
   }
 
@@ -112,13 +120,22 @@ function PackRow({ pricing, pack, above, below }: { pricing: ClientPricing; pack
         <AmountField label="Price" value={draft.price} currency={parsed.currency} onChange={(price) => setDraft((d) => ({ ...d, price }))} />
         <CreditsField value={draft.credits} onChange={(credits) => setDraft((d) => ({ ...d, credits }))} />
         <div className="ml-auto flex items-end">
-          <Button size="sm" onClick={save} disabled={!parsed.valid || !dirty || busy}>
-            {update.isPending && <Loader2 className="size-3.5 animate-spin" />}
+          <Button size="sm" onClick={() => setConfirming(true)} disabled={!parsed.valid || !dirty || busy}>
             Save
           </Button>
         </div>
       </div>
       <span className="text-muted-foreground text-xs">{lastChanged(pack)}</span>
+      <ConfirmPriceDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Save changes to ${pack.name}?`}
+        preview={<PackPreview name={draft.name.trim()} credits={Number(draft.credits)} priceLabel={formatPrice(parsed.priceMinor, parsed.currency, draft.currency)} />}
+        note={`Now ${pack.credits} credits for ${formatPrice(pack.priceMinor, currency, pack.currency)}.${pack.isActive ? "" : " This pack is hidden from clients."}`}
+        confirmLabel="Save"
+        pending={update.isPending}
+        onConfirm={save}
+      />
     </div>
   )
 }
@@ -127,6 +144,7 @@ function AddPackRow({ pricing }: { pricing: ClientPricing }) {
   const empty: Draft = { name: "", price: "", credits: "", currency: pricing.case?.currency ?? pricing.currencies[0]?.code ?? "USD" }
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<Draft>(empty)
+  const [confirming, setConfirming] = useState(false)
   const create = useCreateClientPackMutation()
   const parsed = useParsed(draft, pricing)
 
@@ -148,6 +166,7 @@ function AddPackRow({ pricing }: { pricing: ClientPricing }) {
       {
         onSuccess: () => {
           toast.success(`${draft.name.trim()} created`)
+          setConfirming(false)
           setDraft(empty)
           setOpen(false)
         },
@@ -167,12 +186,20 @@ function AddPackRow({ pricing }: { pricing: ClientPricing }) {
           <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={create.isPending}>
             Cancel
           </Button>
-          <Button size="sm" onClick={submit} disabled={!parsed.valid || create.isPending}>
-            {create.isPending && <Loader2 className="size-3.5 animate-spin" />}
+          <Button size="sm" onClick={() => setConfirming(true)} disabled={!parsed.valid || create.isPending}>
             Create
           </Button>
         </div>
       </div>
+      <ConfirmPriceDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Add this pack?"
+        preview={<PackPreview name={draft.name.trim()} credits={Number(draft.credits)} priceLabel={formatPrice(parsed.priceMinor, parsed.currency, draft.currency)} />}
+        confirmLabel="Create"
+        pending={create.isPending}
+        onConfirm={submit}
+      />
     </div>
   )
 }

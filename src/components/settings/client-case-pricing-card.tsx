@@ -1,11 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { ConfirmPriceDialog } from "@/components/settings/confirm-price-dialog"
 import { CreditsField, validCredits } from "@/components/settings/client-pricing-fields"
 import { type ClientPricing, type ClientPrice, lastChanged, useUpdateClientCaseMutation } from "@/lib/settings/client-pricing"
 
@@ -17,6 +17,7 @@ export function ClientCasePricingCard({ pricing, row }: { pricing: ClientPricing
   // Seeded once at mount; the parent remounts this card (keyed on updatedAt) when the server value
   // changes — same convention as AccountTopUpPricingCard.
   const [credits, setCredits] = useState(String(row.credits))
+  const [confirming, setConfirming] = useState(false)
   const mutation = useUpdateClientCaseMutation()
 
   const valid = validCredits(credits)
@@ -26,7 +27,13 @@ export function ClientCasePricingCard({ pricing, row }: { pricing: ClientPricing
     if (!valid) return
     mutation.mutate(
       { code: pricing.code, patch: { credits: Number(credits) } },
-      { onSuccess: () => toast.success("New-case credits saved"), onError: (err) => toast.error((err as Error).message) }
+      {
+        onSuccess: () => {
+          setConfirming(false)
+          toast.success("New-case credits saved")
+        },
+        onError: (err) => toast.error((err as Error).message),
+      }
     )
   }
 
@@ -46,11 +53,24 @@ export function ClientCasePricingCard({ pricing, row }: { pricing: ClientPricing
         <span className="text-muted-foreground text-xs">{lastChanged(row)}</span>
       </CardContent>
       <CardFooter>
-        <Button size="sm" onClick={save} disabled={!valid || !dirty || mutation.isPending}>
-          {mutation.isPending && <Loader2 className="size-3.5 animate-spin" />}
+        <Button size="sm" onClick={() => setConfirming(true)} disabled={!valid || !dirty || mutation.isPending}>
           Save
         </Button>
       </CardFooter>
+      <ConfirmPriceDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Change new-case credits for ${pricing.name}?`}
+        preview={
+          <div className="rounded-md border p-3 text-left text-sm">
+            Each new case starts with <span className="font-semibold">{valid ? credits : "…"} chat credits</span>.
+          </div>
+        }
+        note={`Now ${row.credits} credits.`}
+        confirmLabel="Save"
+        pending={mutation.isPending}
+        onConfirm={save}
+      />
     </Card>
   )
 }
