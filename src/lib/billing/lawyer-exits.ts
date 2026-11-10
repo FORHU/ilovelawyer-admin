@@ -46,7 +46,7 @@ export interface AdminLawyerExit {
   settledAt: string | null
 }
 
-export const LAWYER_EXITS_PAGE_SIZE = 25
+export const LAWYER_EXITS_PAGE_SIZE = 10
 
 const keys = {
   all: ["admin", "lawyer-exits"] as const,

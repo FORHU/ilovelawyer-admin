@@ -73,7 +73,7 @@ export interface Page<T> {
   data: T[]
 }
 
-export const QUOTE_PAYMENTS_PAGE_SIZE = 25
+export const QUOTE_PAYMENTS_PAGE_SIZE = 10
 
 const keys = {
   all: ["admin", "quotation-payments"] as const,

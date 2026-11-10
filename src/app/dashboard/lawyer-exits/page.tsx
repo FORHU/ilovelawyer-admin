@@ -34,13 +34,10 @@ export default function LawyerExitsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Lawyer exits</h1>
-        <p className="text-muted-foreground text-sm">
-          Lawyers who couldn&apos;t continue after the client paid. Nothing is refunded until you decide: read the lawyer&apos;s reason and any work they claim, then
-          choose how much the client gets back. A disputed payment waits for the client&apos;s bank.
-        </p>
-      </div>
+      <p className="text-muted-foreground text-sm">
+        Lawyers who couldn&apos;t continue after the client paid. Nothing is refunded until you decide: read the lawyer&apos;s reason and any work they claim, then
+        choose how much the client gets back. A disputed payment waits for the client&apos;s bank.
+      </p>
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
           <CardTitle>Exits</CardTitle>
@@ -137,7 +134,7 @@ export default function LawyerExitsPage() {
               </Table>
             </div>
           )}
-          {data && data.total > LAWYER_EXITS_PAGE_SIZE && <ListPagination total={data.total} itemLabel="exit" page={page} pageCount={pageCount} onPageChange={setPage} />}
+          {data && !isError && data.total > 0 && <ListPagination total={data.total} itemLabel="exit" page={page} pageCount={pageCount} onPageChange={setPage} />}
         </CardContent>
       </Card>
     </div>
