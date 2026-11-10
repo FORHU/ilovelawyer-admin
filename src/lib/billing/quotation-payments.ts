@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { apiFetch } from "@/lib/fetch"
 import { useAuthStore } from "@/lib/store/auth.store"
 import type { Money } from "@/lib/billing/queries"
+import type { ExitReason, LawyerExitStatus } from "@/lib/billing/lawyer-exits"
 
 // ilovelawyer-api's quotation payments (QuotationPaymentSvc): a client paying a lawyer's accepted
 // quote through ilovelawyer, split into the lawyer's fee and the platform fee. And the lawyers'
@@ -42,6 +43,21 @@ export interface AdminQuotationPayment {
   succeededAt: string | null
   createdAt: string
   refunds: QuotationRefund[]
+  /** The lawyer stopped acting after this payment (a Lawyer Exit): why, with their notes (admins only;
+   * a conflict note may name the other party), and where its refund stands. */
+  lawyerExit: {
+    id: string
+    status: LawyerExitStatus
+    reason: ExitReason
+    note: string | null
+    workDone: boolean
+    claimed: Money | null
+    claimNote: string | null
+    refunded: Money
+    failureReason: string | null
+    createdAt: string
+    settledAt: string | null
+  } | null
 }
 
 export interface AdminWallet {
@@ -57,7 +73,7 @@ export interface Page<T> {
   data: T[]
 }
 
-export const QUOTE_PAYMENTS_PAGE_SIZE = 25
+export const QUOTE_PAYMENTS_PAGE_SIZE = 10
 
 const keys = {
   all: ["admin", "quotation-payments"] as const,
