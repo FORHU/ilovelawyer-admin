@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "@/lib/fetch"
 import { useAuthStore } from "@/lib/store/auth.store"
 
-// Matches ilovelawyer-api's TenantCode — the closed set of seeded Tenants.
-export type TenantCode = "PH" | "UK"
+// Matches ilovelawyer-api's TenantCode (src/types/tenant-code.ts) — the closed set of seeded Tenants.
+export type TenantCode = "PH" | "UK" | "KR"
 
 // ilovelawyer-api's BulkApprovalProgress (queues/bulk-approval.runner.ts).
 export interface BulkApprovalProgress {
