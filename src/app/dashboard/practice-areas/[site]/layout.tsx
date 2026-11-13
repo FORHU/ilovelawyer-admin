@@ -4,9 +4,7 @@ import Link from "next/link"
 import { notFound, useParams, usePathname } from "next/navigation"
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { LAWYER_SITES, type LawyerSite } from "@/lib/lawyers/queries"
-
-const SITE_NAMES: Record<LawyerSite, string> = { UK: "United Kingdom", PH: "Philippines", KR: "South Korea" }
+import { LAWYER_SITES, LAWYER_SITE_NAMES as SITE_NAMES, type LawyerSite } from "@/lib/lawyers/queries"
 
 /** One site's Practice Area pages, picked from the sidebar: its practice areas, and the client case
  * types they map to, as tabs. Each tab is its own URL, so a reload or a shared link keeps it. */

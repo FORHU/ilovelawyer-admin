@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { LawyerApplicationDetails } from "@/components/lawyers/lawyer-application-details"
 import { Textarea } from "@/components/ui/textarea"
 import {
   REJECTION_REASONS_BY_SITE,
@@ -58,6 +59,14 @@ const selectClass =
   "h-8 w-full rounded-2xl border border-transparent bg-input/50 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
 
 export function LawyerVerificationActions({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
+  return (
+    <div className="flex items-center gap-2">
+      <StatusActions lawyer={lawyer} />
+    </div>
+  )
+}
+
+function StatusActions({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
   const status = lawyer.profile.verification.status
 
   if (status === "VERIFIED")
@@ -86,11 +95,68 @@ export function LawyerVerificationActions({ lawyer }: { lawyer: AdminLawyerVerif
   if (status === "UNSUBMITTED") return <span className="text-muted-foreground text-xs">Profile incomplete</span>
 
   return (
-    <div className="flex items-center gap-2">
+    <>
       <VerifyDialog lawyer={lawyer} />
       <RejectDialog lawyer={lawyer} />
+    </>
+  )
+}
+
+/** Wide enough for the application side by side, and scrolls when it's long. */
+const wideDialog = "flex max-h-[88vh] flex-col overflow-hidden sm:max-w-2xl"
+
+/** The application, in its own scroll area inside a dialog. */
+function ApplicationPanel({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
+  return (
+    <div className="border-border min-h-0 flex-1 overflow-y-auto rounded-xl border p-4">
+      <LawyerApplicationDetails lawyer={lawyer} />
     </div>
   )
+}
+
+/** The whole application and the lawyer's firm, opened by clicking the lawyer's row in the queue.
+ * A pending one can be approved or rejected from here too. */
+export function LawyerApplicationDialog({
+  lawyer,
+  open,
+  onOpenChange,
+}: {
+  lawyer: AdminLawyerVerificationRow | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Dialog open={open && !!lawyer} onOpenChange={onOpenChange}>
+      {lawyer && (
+        <DialogContent className={wideDialog}>
+          <DialogHeader>
+            <DialogTitle>{lawyer.name}&apos;s application</DialogTitle>
+            <DialogDescription>Everything they submitted, with their firm&apos;s details.</DialogDescription>
+          </DialogHeader>
+          <ApplicationPanel lawyer={lawyer} />
+          <DialogFooter className="sm:items-center">
+            <div className="mr-auto flex items-center gap-2">
+              <StatusActions lawyer={lawyer} />
+            </div>
+            <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      )}
+    </Dialog>
+  )
+}
+
+/** What to check, and what approval means, per site. */
+const APPROVE_DESCRIPTION: Record<LawyerSite, string> = {
+  UK: "Check the details below against the regulator's register, and confirm which jurisdictions they're qualified in. They can start receiving client requests once approved.",
+  PH: "Check their Roll of Attorneys number and IBP chapter below. Their profile shows an Approved badge once approved.",
+  KR: "Check their registration number and local bar below against the Korean Bar Association's register. They can choose a plan and start using ilovelawyer once approved.",
+}
+
+const REJECT_DESCRIPTION: Record<LawyerSite, string> = {
+  UK: "They'll be emailed the reason and your note, and won't receive client requests.",
+  PH: "They'll be emailed the reason and your note.",
+  KR: "They'll be emailed the reason and your note, and can't start using ilovelawyer until they fix it and are approved.",
 }
 
 /** The jurisdictions a UK lawyer claimed; none on PH or KR. */
@@ -144,15 +210,12 @@ function VerifyDialog({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
       }}
     >
       <DialogTrigger render={<Button size="sm" />}>Approve</DialogTrigger>
-      <DialogContent>
+      <DialogContent className={wideDialog}>
         <DialogHeader>
           <DialogTitle>Approve {lawyer.name}?</DialogTitle>
-          <DialogDescription>
-            {uk
-              ? "Confirm which jurisdictions the register shows they're qualified in. They can start receiving client requests once approved."
-              : "Check their Roll of Attorneys number and IBP chapter. Their profile shows an Approved badge once approved."}
-          </DialogDescription>
+          <DialogDescription>{APPROVE_DESCRIPTION[lawyer.profile.country]}</DialogDescription>
         </DialogHeader>
+        <ApplicationPanel lawyer={lawyer} />
         {uk && (
           <div className="flex flex-col gap-2">
             {UK_JURISDICTIONS.map((jurisdiction) => {
@@ -237,13 +300,12 @@ function RejectDialog({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
       }}
     >
       <DialogTrigger render={<Button variant="outline" size="sm" />}>Reject</DialogTrigger>
-      <DialogContent>
+      <DialogContent className={wideDialog}>
         <DialogHeader>
           <DialogTitle>Reject {lawyer.name}?</DialogTitle>
-          <DialogDescription>
-            They&apos;ll be emailed the reason and your note, and won&apos;t receive client requests.
-          </DialogDescription>
+          <DialogDescription>{REJECT_DESCRIPTION[lawyer.profile.country]}</DialogDescription>
         </DialogHeader>
+        <ApplicationPanel lawyer={lawyer} />
         <div className="flex flex-col gap-2">
           <Label htmlFor={`reject-reason-${lawyer.userId}`} className="font-normal select-text">
             Reason

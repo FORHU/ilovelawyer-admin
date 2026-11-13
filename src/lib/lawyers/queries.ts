@@ -11,6 +11,15 @@ import { useAuthStore } from "@/lib/store/auth.store"
 export const LAWYER_SITES = ["UK", "PH", "KR"] as const
 export type LawyerSite = (typeof LAWYER_SITES)[number]
 
+/** Each site's name, for the per-site pages (Lawyer applications, Practice Area). */
+export const LAWYER_SITE_NAMES: Record<LawyerSite, string> = { UK: "United Kingdom", PH: "Philippines", KR: "South Korea" }
+
+/** The site from a page's `[site]` slug ("uk", "ph", "kr"), or null for anything else. */
+export function siteFromSlug(slug: string): LawyerSite | null {
+  const site = slug.toUpperCase()
+  return (LAWYER_SITES as readonly string[]).includes(site) ? (site as LawyerSite) : null
+}
+
 export const LAWYER_REGULATORS = ["SRA", "LSS", "LSNI"] as const
 export type LawyerRegulator = (typeof LAWYER_REGULATORS)[number]
 
@@ -118,6 +127,8 @@ export interface AdminLawyerProfile {
   practiceAreas: { id: string; name: string; isActive: boolean }[]
   bio: string
   languages: string[]
+  /** Minor units of the site's currency: pence, centavos, or won (no decimals). Null: no offer. */
+  firstConsultationFee: { amountMinor: number; currency: string } | null
   verification: {
     status: LawyerVerificationStatus
     note: string | null

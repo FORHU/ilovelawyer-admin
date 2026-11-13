@@ -36,6 +36,19 @@ interface DataTableProps<TData, TValue> {
   page: number
   pageCount: number
   onPageChange: (page: number) => void
+  /** Makes each row clickable (and Enter/Space when it has focus): e.g. to open its details.
+   * Clicks on a button, link or field inside the row, or inside a dialog it opened, don't count. */
+  onRowClick?: (row: TData) => void
+  /** The row's accessible name when it's clickable, e.g. "View Jane Lawyer's application". */
+  rowLabel?: (row: TData) => string
+}
+
+/** Whether a click or key press is the row's own, not a control inside it or a dialog it opened
+ * (portalled out of the row, but React still bubbles its events through it). */
+function isRowOwnEvent(event: React.SyntheticEvent<HTMLTableRowElement>): boolean {
+  const target = event.target as HTMLElement
+  if (!event.currentTarget.contains(target)) return false
+  return !target.closest("button, a, input, select, textarea, label, [role='dialog'], [role='menu'], [role='listbox']")
 }
 
 export function DataTable<TData, TValue>({
@@ -52,6 +65,8 @@ export function DataTable<TData, TValue>({
   page,
   pageCount,
   onPageChange,
+  onRowClick,
+  rowLabel,
 }: DataTableProps<TData, TValue>) {
   // TanStack Table's returned functions are intentionally unstable across renders;
   // React Compiler can't memoize this safely and flags it, but that's expected here.
@@ -94,7 +109,25 @@ export function DataTable<TData, TValue>({
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  {...(onRowClick
+                    ? {
+                        tabIndex: 0,
+                        "aria-label": rowLabel?.(row.original),
+                        className: "cursor-pointer focus-visible:bg-muted/50 focus-visible:outline-none",
+                        onClick: (event: React.MouseEvent<HTMLTableRowElement>) => {
+                          if (isRowOwnEvent(event)) onRowClick(row.original)
+                        },
+                        onKeyDown: (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+                          if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
+                            event.preventDefault()
+                            onRowClick(row.original)
+                          }
+                        },
+                      }
+                    : {})}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

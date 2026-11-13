@@ -34,15 +34,13 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 import { useLogoutMutation } from "@/lib/auth/mutations"
+import { LAWYER_SITES } from "@/lib/lawyers/queries"
 import { useAuthStore } from "@/lib/store/auth.store"
 
 type NavItem = { title: string; url: string; icon: typeof Users }
 
-// Practice Area sits between these two lists, right after Lawyer applications.
-const navItemsBefore: NavItem[] = [
-  { title: "Users", url: "/dashboard/users", icon: Users },
-  { title: "Lawyer applications", url: "/dashboard/lawyers", icon: ShieldCheck },
-]
+// Lawyer applications and Practice Area, each split by site, sit between these two lists.
+const navItemsBefore: NavItem[] = [{ title: "Users", url: "/dashboard/users", icon: Users }]
 const navItemsAfter: NavItem[] = [
   { title: "Audit trail", url: "/dashboard/audit", icon: ScrollText },
   { title: "Feedback", url: "/dashboard/feedback", icon: MessageSquareText },
@@ -53,27 +51,30 @@ const navItemsAfter: NavItem[] = [
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ]
 
-const PRACTICE_AREAS_URL = "/dashboard/practice-areas"
-const practiceAreaSites = [
-  { title: "UK", url: `${PRACTICE_AREAS_URL}/uk` },
-  { title: "PH", url: `${PRACTICE_AREAS_URL}/ph` },
-  { title: "KR", url: `${PRACTICE_AREAS_URL}/kr` },
+/** A section split by site: one sub-item per site under it (UK, PH, KR), each with its own tabs on
+ * the page. */
+type SiteNavItem = { title: string; url: string; icon: typeof Users }
+const siteNavItems: SiteNavItem[] = [
+  { title: "Lawyer applications", url: "/dashboard/lawyers", icon: ShieldCheck },
+  { title: "Practice Area", url: "/dashboard/practice-areas", icon: BookOpen },
 ]
 
-/** Each site's practice areas and client case types (tabs on the site's page). Clicking it opens
- * UK (the default) and shows every site under it; it stays open while any of those pages is. */
-function PracticeAreaNav({ pathname }: { pathname: string }) {
-  const open = pathname.startsWith(PRACTICE_AREAS_URL)
+/** A section split by site, like Lawyer applications (status tabs) and Practice Area (practice areas
+ * and case types). Clicking it opens UK (the default) and shows every site under it; it stays open
+ * while any of those pages is. */
+function SiteNav({ item, pathname }: { item: SiteNavItem; pathname: string }) {
+  const open = pathname === item.url || pathname.startsWith(`${item.url}/`)
+  const sites = LAWYER_SITES.map((site) => ({ title: site, url: `${item.url}/${site.toLowerCase()}` }))
   return (
     <Collapsible open={open} render={<SidebarMenuItem />}>
-      <SidebarMenuButton render={<Link href={practiceAreaSites[0].url} />} isActive={open} aria-expanded={open}>
-        <BookOpen />
-        <span>Practice Area</span>
+      <SidebarMenuButton render={<Link href={sites[0].url} />} isActive={open} aria-expanded={open}>
+        <item.icon />
+        <span>{item.title}</span>
         <ChevronRight className={`ml-auto transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
       </SidebarMenuButton>
       <CollapsibleContent>
         <SidebarMenuSub>
-          {practiceAreaSites.map((site) => (
+          {sites.map((site) => (
             <SidebarMenuSubItem key={site.url}>
               <SidebarMenuSubButton render={<Link href={site.url} />} isActive={pathname === site.url || pathname.startsWith(`${site.url}/`)}>
                 <span>{site.title}</span>
@@ -125,7 +126,9 @@ export function AppSidebar() {
               {navItemsBefore.map((item) => (
                 <NavLink key={item.url} item={item} pathname={pathname} />
               ))}
-              <PracticeAreaNav pathname={pathname} />
+              {siteNavItems.map((item) => (
+                <SiteNav key={item.url} item={item} pathname={pathname} />
+              ))}
               {navItemsAfter.map((item) => (
                 <NavLink key={item.url} item={item} pathname={pathname} />
               ))}

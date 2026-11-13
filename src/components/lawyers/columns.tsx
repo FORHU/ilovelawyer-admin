@@ -241,7 +241,7 @@ const tailColumns: ColumnDef<AdminLawyerVerificationRow>[] = [
     id: "actions",
     header: "Actions",
     cell: ({ row }) => (
-      <div className="min-w-37.5">
+      <div className="min-w-37.5 whitespace-nowrap">
         <LawyerVerificationActions lawyer={row.original} />
       </div>
     ),
