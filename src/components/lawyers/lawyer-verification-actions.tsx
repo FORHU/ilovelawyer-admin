@@ -46,6 +46,12 @@ const REJECTION_REASON_LABELS: Record<LawyerSite, Partial<Record<LawyerRejection
     NOT_IN_GOOD_STANDING: "Not in good standing with the IBP",
     OTHER: "Other",
   },
+  KR: {
+    NAME_MISMATCH: "Name doesn't match the Korean Bar Association's register",
+    REGISTRATION_NOT_FOUND: "Registration number not found",
+    NOT_PRACTISING: "Not currently practising (휴업 or not registered)",
+    OTHER: "Other",
+  },
 }
 
 const selectClass =
@@ -87,7 +93,7 @@ export function LawyerVerificationActions({ lawyer }: { lawyer: AdminLawyerVerif
   )
 }
 
-/** The jurisdictions a UK lawyer claimed; none on PH. */
+/** The jurisdictions a UK lawyer claimed; none on PH or KR. */
 function claimedJurisdictions(lawyer: AdminLawyerVerificationRow): UkJurisdiction[] {
   const r = lawyer.profile.registration
   return r.country === "UK" ? r.qualifiedJurisdictions : []
@@ -98,7 +104,7 @@ function VerifyDialog({ lawyer }: { lawyer: AdminLawyerVerificationRow }) {
   const [open, setOpen] = useState(false)
   const [confirmed, setConfirmed] = useState<UkJurisdiction[]>(() => claimedJurisdictions(lawyer))
   const [note, setNote] = useState("")
-  // UK: the admin confirms the jurisdictions on the register. PH has none to confirm.
+  // UK: the admin confirms the jurisdictions on the register. PH and KR have none to confirm.
   const uk = lawyer.profile.country === "UK"
 
   // A register mismatch needs the admin to say why they're approving anyway. The register check

@@ -57,10 +57,11 @@ const PRACTICE_AREAS_URL = "/dashboard/practice-areas"
 const practiceAreaSites = [
   { title: "UK", url: `${PRACTICE_AREAS_URL}/uk` },
   { title: "PH", url: `${PRACTICE_AREAS_URL}/ph` },
+  { title: "KR", url: `${PRACTICE_AREAS_URL}/kr` },
 ]
 
 /** Each site's practice areas and client case types (tabs on the site's page). Clicking it opens
- * UK (the default) and shows both sites under it; it stays open while any of those pages is. */
+ * UK (the default) and shows every site under it; it stays open while any of those pages is. */
 function PracticeAreaNav({ pathname }: { pathname: string }) {
   const open = pathname.startsWith(PRACTICE_AREAS_URL)
   return (

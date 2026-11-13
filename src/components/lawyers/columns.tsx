@@ -7,7 +7,15 @@ import { RegisterCheckBadge } from "@/components/lawyers/register-check-badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { type AdminFirm, type AdminLawyerVerificationRow, type LawyerSite } from "@/lib/lawyers/queries"
+import {
+  KR_COHORT_SUFFIX,
+  KR_FIRM_TYPE_NAMES,
+  KR_LOCAL_BAR_NAMES,
+  KR_QUALIFICATION_ROUTE_NAMES,
+  type AdminFirm,
+  type AdminLawyerVerificationRow,
+  type LawyerSite,
+} from "@/lib/lawyers/queries"
 
 function initials(name: string): string {
   return name
@@ -29,7 +37,10 @@ const none = <span className="text-muted-foreground">—</span>
 function FirmLine({ firm }: { firm: AdminFirm }) {
   const address = [firm.address.line1, firm.address.line2, firm.address.city, firm.address.postcode].filter(Boolean).join(", ")
   const registration = [firm.regulator, firm.registrationNumber].filter(Boolean).join(" ")
-  const details = [registration, firm.phone, address].filter(Boolean)
+  // KR: the firm type and its business registration number, written 123-45-67890.
+  const krType = firm.firmType ? KR_FIRM_TYPE_NAMES[firm.firmType] : null
+  const brn = firm.businessRegistrationNumber?.replace(/^(d{3})(d{2})(d{5})$/, "$1-$2-$3") ?? null
+  const details = [registration, krType, brn && `사업자등록번호 ${brn}`, firm.phone, address].filter(Boolean)
   if (details.length === 0) return <span className="text-muted-foreground text-xs">{firm.name}</span>
   return (
     <Tooltip>
@@ -144,6 +155,61 @@ const phColumns: ColumnDef<AdminLawyerVerificationRow>[] = [
   },
 ]
 
+const krColumns: ColumnDef<AdminLawyerVerificationRow>[] = [
+  {
+    id: "krRegistration",
+    header: "Registration",
+    cell: ({ row }) => {
+      const r = row.original.profile.registration
+      if (r.country !== "KR" || (!r.registrationNumber && !r.localBar)) return none
+      return (
+        <div className="flex min-w-45 flex-col">
+          {r.registrationNumber && <span className="font-mono text-xs">{r.registrationNumber}</span>}
+          {r.localBar && <span className="text-muted-foreground text-xs">{KR_LOCAL_BAR_NAMES[r.localBar]}</span>}
+        </div>
+      )
+    },
+  },
+  {
+    id: "krQualification",
+    header: "Qualified",
+    cell: ({ row }) => {
+      const r = row.original.profile.registration
+      if (r.country !== "KR" || (!r.qualificationRoute && !r.registeredOn)) return none
+      return (
+        <div className="flex min-w-37.5 flex-col">
+          {r.qualificationRoute && (
+            <span className="text-xs">
+              {KR_QUALIFICATION_ROUTE_NAMES[r.qualificationRoute]}
+              {r.qualificationCohort != null && ` · 제${r.qualificationCohort}${KR_COHORT_SUFFIX[r.qualificationRoute]}`}
+            </span>
+          )}
+          {r.registeredOn && <span className="text-muted-foreground text-xs">Registered {formatDate(r.registeredOn)}</span>}
+        </div>
+      )
+    },
+  },
+  {
+    id: "krSpecialties",
+    header: "Specialties",
+    cell: ({ row }) => {
+      const r = row.original.profile.registration
+      if (r.country !== "KR" || !r.specialties.length) return none
+      return (
+        <div className="flex max-w-55 flex-wrap gap-1">
+          {r.specialties.map((specialty) => (
+            <Badge key={specialty} variant="outline">
+              {specialty}
+            </Badge>
+          ))}
+        </div>
+      )
+    },
+  },
+]
+
+const SITE_COLUMNS: Record<LawyerSite, ColumnDef<AdminLawyerVerificationRow>[]> = { UK: ukColumns, PH: phColumns, KR: krColumns }
+
 const tailColumns: ColumnDef<AdminLawyerVerificationRow>[] = [
   {
     id: "practiceAreas",
@@ -183,7 +249,7 @@ const tailColumns: ColumnDef<AdminLawyerVerificationRow>[] = [
 ]
 
 /** The queue's columns for one site: each checks its own registration details. UK has a register
- * check (deferred, so always "check by hand" for now); PH has none. */
+ * check (deferred, so always "check by hand" for now); PH and KR have none. */
 export function columnsFor(site: LawyerSite): ColumnDef<AdminLawyerVerificationRow>[] {
-  return [lawyerColumn, ...(site === "PH" ? phColumns : ukColumns), ...tailColumns]
+  return [lawyerColumn, ...SITE_COLUMNS[site], ...tailColumns]
 }
