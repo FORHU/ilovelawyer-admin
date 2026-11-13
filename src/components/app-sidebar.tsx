@@ -90,10 +90,12 @@ const supportPages = [
   { title: "Content", url: SUPPORT_URL },
   { title: "Flows", url: `${SUPPORT_URL}/flows` },
   { title: "Versions", url: `${SUPPORT_URL}/versions` },
+  { title: "Tickets", url: `${SUPPORT_URL}/tickets` },
+  { title: "Report", url: `${SUPPORT_URL}/report` },
 ]
 
-/** The client Support Chat's editor: its words and menus, its flows, and what has been published.
- * Clicking it opens Content and shows the pages under it; it stays open while any of them is. */
+/** The client Support Chat: its editor (words and menus, flows, what has been published), the tickets
+ * clients send the team, and the outcome report. Clicking it opens Content and shows the pages under it; it stays open while any of them is. */
 function SupportChatNav({ pathname }: { pathname: string }) {
   const open = pathname.startsWith(SUPPORT_URL)
   return (
