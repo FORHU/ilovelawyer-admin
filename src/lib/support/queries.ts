@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "@/lib/fetch"
 import { useAuthStore } from "@/lib/store/auth.store"
 import type {
@@ -7,6 +7,10 @@ import type {
   AdminSupportVersion,
   SupportContent,
   SupportContentProblem,
+  SupportReport,
+  SupportTicketDetail,
+  SupportTicketPage,
+  SupportTicketStatus,
 } from "@/lib/support/types"
 
 // ilovelawyer-api's /api/admin/support/content/* (SupportContentAdminCtrl). The draft is loaded once
@@ -91,5 +95,76 @@ export function useRollbackSupportMutation() {
     mutationFn: (version: number) =>
       apiFetch<{ version: number; publishedAt: string; rolledBackFromVersion: number }>(`${BASE}/content/versions/${version}/rollback`, { method: "POST" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: supportKeys.versions }),
+  })
+}
+
+// Support Tickets and the outcome report. The admin app has no socket, so the inbox and an open
+// ticket poll every 30 seconds; a reply the client just sent shows within that.
+
+export const TICKET_POLL_MS = 30_000
+
+export interface SupportTicketFilters {
+  status?: SupportTicketStatus
+  q: string
+  sort: "age" | "updated"
+  page: number
+}
+
+export const ticketKeys = {
+  all: ["admin", "support", "tickets"] as const,
+  list: (filters: SupportTicketFilters) => ["admin", "support", "tickets", "list", filters] as const,
+  one: (id: string) => ["admin", "support", "tickets", "one", id] as const,
+  report: (from: string, to: string) => ["admin", "support", "report", from, to] as const,
+}
+
+export function useSupportTicketsQuery(filters: SupportTicketFilters) {
+  const accessToken = useAuthStore((s) => s.accessToken)
+  return useQuery({
+    queryKey: ticketKeys.list(filters),
+    queryFn: () => {
+      const params = new URLSearchParams({ sort: filters.sort, page: String(filters.page) })
+      if (filters.status) params.set("status", filters.status)
+      if (filters.q.trim()) params.set("q", filters.q.trim())
+      return apiFetch<SupportTicketPage>(`${BASE}/tickets?${params}`)
+    },
+    enabled: !!accessToken,
+    placeholderData: keepPreviousData,
+    refetchInterval: TICKET_POLL_MS,
+  })
+}
+
+export function useSupportTicketQuery(id: string) {
+  const accessToken = useAuthStore((s) => s.accessToken)
+  return useQuery({
+    queryKey: ticketKeys.one(id),
+    queryFn: () => apiFetch<SupportTicketDetail>(`${BASE}/tickets/${encodeURIComponent(id)}`),
+    enabled: !!accessToken,
+    refetchInterval: TICKET_POLL_MS,
+  })
+}
+
+function useTicketMutation<V>(mutationFn: (vars: V) => Promise<unknown>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ticketKeys.all }),
+  })
+}
+
+const post = (id: string, path: string, body?: unknown) =>
+  apiFetch<unknown>(`${BASE}/tickets/${encodeURIComponent(id)}/${path}`, { method: "POST", ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
+
+export const useReplyToTicketMutation = (id: string) => useTicketMutation((body: string) => post(id, "replies", { body }))
+export const useResolveTicketMutation = (id: string) => useTicketMutation(() => post(id, "resolve"))
+export const useReopenTicketMutation = (id: string) => useTicketMutation(() => post(id, "reopen"))
+
+/** `from` and `to` are ISO instants; `to` is exclusive. */
+export function useSupportReportQuery(from: string, to: string, enabled: boolean) {
+  const accessToken = useAuthStore((s) => s.accessToken)
+  return useQuery({
+    queryKey: ticketKeys.report(from, to),
+    queryFn: () => apiFetch<SupportReport>(`${BASE}/report?${new URLSearchParams({ from, to })}`),
+    enabled: !!accessToken && enabled,
+    placeholderData: keepPreviousData,
   })
 }
