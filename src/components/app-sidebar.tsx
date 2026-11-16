@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, ChevronRight, Cpu, DoorOpen, Loader2, Repeat, LogOut, MessageSquareText, Receipt, ScrollText, Settings, ShieldCheck, Users } from "lucide-react"
+import { BookOpen, ChevronRight, Cpu, DoorOpen, LifeBuoy, Loader2, Repeat, LogOut, MessageSquareText, Receipt, ScrollText, Settings, ShieldCheck, Users } from "lucide-react"
 
 import {
   AlertDialog,
@@ -38,7 +38,7 @@ import { useAuthStore } from "@/lib/store/auth.store"
 
 type NavItem = { title: string; url: string; icon: typeof Users }
 
-// Practice Area sits between these two lists, right after Lawyer applications.
+// Practice Area and Support Chat sit between these two lists, right after Lawyer applications.
 const navItemsBefore: NavItem[] = [
   { title: "Users", url: "/dashboard/users", icon: Users },
   { title: "Lawyer applications", url: "/dashboard/lawyers", icon: ShieldCheck },
@@ -76,6 +76,42 @@ function PracticeAreaNav({ pathname }: { pathname: string }) {
             <SidebarMenuSubItem key={site.url}>
               <SidebarMenuSubButton render={<Link href={site.url} />} isActive={pathname === site.url || pathname.startsWith(`${site.url}/`)}>
                 <span>{site.title}</span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+          ))}
+        </SidebarMenuSub>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+const SUPPORT_URL = "/dashboard/support"
+const supportPages = [
+  { title: "Content", url: SUPPORT_URL },
+  { title: "Flows", url: `${SUPPORT_URL}/flows` },
+  { title: "Versions", url: `${SUPPORT_URL}/versions` },
+]
+
+/** The client Support Chat's editor: its words and menus, its flows, and what has been published.
+ * Clicking it opens Content and shows the pages under it; it stays open while any of them is. */
+function SupportChatNav({ pathname }: { pathname: string }) {
+  const open = pathname.startsWith(SUPPORT_URL)
+  return (
+    <Collapsible open={open} render={<SidebarMenuItem />}>
+      <SidebarMenuButton render={<Link href={SUPPORT_URL} />} isActive={open} aria-expanded={open}>
+        <LifeBuoy />
+        <span>Support Chat</span>
+        <ChevronRight className={`ml-auto transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
+      </SidebarMenuButton>
+      <CollapsibleContent>
+        <SidebarMenuSub>
+          {supportPages.map((page) => (
+            <SidebarMenuSubItem key={page.url}>
+              <SidebarMenuSubButton
+                render={<Link href={page.url} />}
+                isActive={page.url === SUPPORT_URL ? pathname === SUPPORT_URL : pathname === page.url || pathname.startsWith(`${page.url}/`)}
+              >
+                <span>{page.title}</span>
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>
           ))}
@@ -125,6 +161,7 @@ export function AppSidebar() {
                 <NavLink key={item.url} item={item} pathname={pathname} />
               ))}
               <PracticeAreaNav pathname={pathname} />
+              <SupportChatNav pathname={pathname} />
               {navItemsAfter.map((item) => (
                 <NavLink key={item.url} item={item} pathname={pathname} />
               ))}

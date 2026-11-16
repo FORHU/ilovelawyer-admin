@@ -62,7 +62,8 @@ function buildHeaders(extra?: HeadersInit): HeadersInit {
 async function throwIfNotOk(res: Response): Promise<void> {
   if (res.ok) return
   const error = await res.json().catch(() => ({ message: res.statusText }))
-  throw Object.assign(new Error(error.message ?? "Request failed"), { status: res.status })
+  // `code` and the rest of the body (a publish refused with its `problems`) ride along for callers that want them.
+  throw Object.assign(new Error(error.message ?? "Request failed"), { status: res.status, code: error.code as string | undefined, body: error as Record<string, unknown> })
 }
 
 /** Like apiFetch, but returns the raw Response instead of parsing JSON, for file downloads. */
