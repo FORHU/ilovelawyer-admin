@@ -23,18 +23,32 @@ export interface BulkApprovalProgress {
 export interface AccountTopUpPricing {
   code: TenantCode
   name: string
+  /** What a lawyer on this site is charged in for a top-up: the site's currency (KRW on KR). */
+  currency: PlanCurrency
   feeType: "FIXED" | "PERCENT"
+  /** FIXED: in `currency` (dollars, or whole won). PERCENT: 0-100. */
   feeAmount: number
   feeUpdatedAt: string | null
   feeUpdatedBy: { name: string | null; email: string } | null
+  /** How much of `currency` buys $1 of AI usage. Null on a US-dollar site, which has nothing to convert. */
+  perUsd: number | null
+  rateUpdatedAt: string | null
+  rateUpdatedBy: { name: string | null; email: string } | null
 }
 
 // ilovelawyer-api's PaymentPlan model — one admin-editable B2B subscription tier (Standard/Pro/Max
 // are placeholders) for a tenant: its fee, the AI allowance it includes, and its case limit.
 
-/** The currencies a lawyer's plan is priced in: each site's own (planCurrency), USD on PH and UK
- * and won on KR. The API sets it; the admin edits only the amount. */
-export type PlanCurrency = "USD" | "KRW"
+/** The currencies a site's lawyers can be charged in (plans and AI top-ups): the API's
+ * PLAN_CURRENCIES. Each site is in one (planCurrency), changed on its Payment plans page. */
+export type PlanCurrency = "USD" | "GBP" | "PHP" | "KRW"
+
+/** One currency the currency picker offers: its minor-unit digits and the API's ceiling on a fee. */
+export interface PlanCurrencyOption {
+  code: PlanCurrency
+  exponent: number
+  maxMinor: number
+}
 export interface PaymentPlan {
   id: string
   code: string
@@ -68,9 +82,16 @@ export interface TenantSettings {
   pendingCount: number
   bulkApproval: BulkApprovalProgress | null
   accountTopUp: AccountTopUpPricing | null
-  /** The currency this site's tiers are priced in (KRW on KR), for a new tier too. */
+  /** The currency this site's lawyers are charged in (KRW on KR): its tiers, a new tier, and the AI top-up. */
   planCurrency: PlanCurrency
+  /** The site's local currency (PHP on PH, KRW on KR, USD on UK): what the picker suggests. */
+  defaultPlanCurrency: PlanCurrency
   paymentPlans: PaymentPlan[]
+}
+
+export interface AdminSettings {
+  tenants: TenantSettings[]
+  planCurrencies: PlanCurrencyOption[]
 }
 
 const settingsQueryKey = ["admin", "settings"] as const
@@ -80,7 +101,7 @@ export function useAdminSettingsQuery() {
   const accessToken = useAuthStore((s) => s.accessToken)
   return useQuery({
     queryKey: settingsQueryKey,
-    queryFn: () => apiFetch<{ tenants: TenantSettings[] }>("/api/admin/settings"),
+    queryFn: () => apiFetch<AdminSettings>("/api/admin/settings"),
     enabled: !!accessToken,
     // Poll only while an "Approve all pending" run is going, so its progress bar moves.
     refetchInterval: (query) =>
@@ -103,10 +124,10 @@ export function useUpdateTenantSettingMutation() {
 export function useUpdateAccountTopUpFeeMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ code, feeType, feeAmount }: { code: TenantCode; feeType: "FIXED" | "PERCENT"; feeAmount: number }) =>
+    mutationFn: ({ code, feeType, feeAmount, perUsd }: { code: TenantCode; feeType: "FIXED" | "PERCENT"; feeAmount: number; perUsd?: number }) =>
       apiFetch<TenantSettings>(`/api/admin/settings/tenants/${code}`, {
         method: "PATCH",
-        body: JSON.stringify({ accountTopUpFeeType: feeType, accountTopUpFeeAmount: feeAmount }),
+        body: JSON.stringify({ accountTopUpFeeType: feeType, accountTopUpFeeAmount: feeAmount, ...(perUsd !== undefined ? { accountTopUpRate: perUsd } : {}) }),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
   })
@@ -144,6 +165,20 @@ export function useUpdatePaymentPlanMutation() {
       apiFetch<PaymentPlan>(`/api/admin/settings/tenants/${code}/payment-plans/${planId}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
+  })
+}
+
+/** Moves a site's lawyers to another currency, with a price in it for every tier (hidden ones too).
+ * The API refuses (409) while a lawyer on the site has a live subscription. */
+export function useChangePlanCurrencyMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ code, currency, prices }: { code: TenantCode; currency: PlanCurrency; prices: { planId: string; priceMinor: number }[] }) =>
+      apiFetch<{ currency: PlanCurrency; checkoutsClosed: number; topUpFeeReset: boolean }>(`/api/admin/settings/tenants/${code}/payment-plans/currency`, {
+        method: "PUT",
+        body: JSON.stringify({ currency, prices }),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
   })

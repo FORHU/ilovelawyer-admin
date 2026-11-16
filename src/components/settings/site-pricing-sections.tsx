@@ -6,6 +6,7 @@ import { ClientPromosCard } from "@/components/settings/client-promos-card"
 import { ClientTopUpPacksCard } from "@/components/settings/client-topup-packs-card"
 import { LawyerPricingCard } from "@/components/settings/lawyer-pricing-card"
 import { PaymentPlansCard } from "@/components/settings/payment-plans-card"
+import { SiteCurrencyCard } from "@/components/settings/site-currency-card"
 import { PayoutSettingsCard } from "@/components/settings/payout-settings-card"
 import type { LawyerSite } from "@/lib/lawyers/queries"
 import { useClientPricingQuery } from "@/lib/settings/client-pricing"
@@ -49,19 +50,31 @@ function LawyerPlansSections({ site }: { site: LawyerSite }) {
   const tenant = data?.tenants.find((t) => t.code === site)
   return (
     <>
+      <Section title="Currency" description="What this site's lawyers pay in: their monthly plan and their account AI top-ups.">
+        <QueryState isLoading={isLoading} error={error} what="the currency" />
+        {data && !tenant && <NotSetUp site={site} />}
+        {tenant && data && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <SiteCurrencyCard key={`${tenant.code}-${tenant.planCurrency}-${tenant.paymentPlans.map((p) => p.id).join(",")}`} tenant={tenant} currencies={data.planCurrencies} />
+          </div>
+        )}
+      </Section>
       <Section
         title="Subscription plans"
         description={`The monthly plans lawyers on this site choose from${tenant ? `, priced in ${tenant.planCurrency}` : ""}. A new price reaches new checkouts; lawyers already subscribed keep paying what they signed up at.`}
       >
         <QueryState isLoading={isLoading} error={error} what="plans" />
         {data && !tenant && <NotSetUp site={site} />}
-        {tenant && <PaymentPlansCard key={`${tenant.code}-${tenant.paymentPlans.map((p) => p.updatedAt).join(",")}`} tenant={tenant} />}
+        {tenant && (
+          // Also keyed on the top-up rate: the AI allowances are shown in won at that rate on KR.
+          <PaymentPlansCard key={`${tenant.code}-${tenant.accountTopUp?.rateUpdatedAt}-${tenant.paymentPlans.map((p) => p.updatedAt).join(",")}`} tenant={tenant} />
+        )}
       </Section>
-      <Section title="Account AI top-up fee" description="The platform fee added when a lawyer tops up their account's AI usage. Changes apply immediately.">
+      <Section title="Account AI top-up" description="What lawyers pay to top up their account's AI usage, and the platform fee on it. Changes apply immediately.">
         <QueryState isLoading={isLoading} error={error} what="the top-up fee" />
         {tenant && (
           <div className="grid gap-4 lg:grid-cols-2">
-            <AccountTopUpPricingCard key={`${tenant.code}-${tenant.accountTopUp?.feeUpdatedAt}`} tenant={tenant} />
+            <AccountTopUpPricingCard key={`${tenant.code}-${tenant.accountTopUp?.feeUpdatedAt}-${tenant.accountTopUp?.rateUpdatedAt}`} tenant={tenant} />
           </div>
         )}
       </Section>
@@ -135,14 +148,30 @@ function LawyerPricingSection({ site }: { site: LawyerSite }) {
   )
 }
 
+/** Sites where client requests aren't open yet, so their quote payments and lawyer fees (in pounds,
+ * like every quote) can't be charged: hidden there rather than shown at prices that don't apply. */
+const CLIENT_REQUESTS_NOT_OPEN: readonly LawyerSite[] = ["KR"]
+
 /** Every price and fee on one site, in the order a lawyer then a client meets them. */
 export function SitePricingSections({ site }: { site: LawyerSite }) {
+  const clientRequestsOpen = !CLIENT_REQUESTS_NOT_OPEN.includes(site)
   return (
     <div className="flex flex-col gap-8">
       <LawyerPlansSections site={site} />
       <ClientPricingSection site={site} />
-      <PayoutSettingsSection site={site} />
-      <LawyerPricingSection site={site} />
+      {clientRequestsOpen ? (
+        <>
+          <PayoutSettingsSection site={site} />
+          <LawyerPricingSection site={site} />
+        </>
+      ) : (
+        <Section
+          title="Quote payments and lawyer fees"
+          description="These apply to client requests, which aren't open on this site yet. They'll appear here, in this site's currency, when client requests open."
+        >
+          {null}
+        </Section>
+      )}
     </div>
   )
 }
