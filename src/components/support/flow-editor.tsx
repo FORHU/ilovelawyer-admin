@@ -84,7 +84,7 @@ export function FlowEditor({ flowId }: { flowId: string }) {
     return (
       <div className="flex flex-col items-start gap-3">
         <p className="text-sm">There&apos;s no flow called “{flowId}” in this draft.</p>
-        <Button render={<Link href="/dashboard/support/flows" />} variant="outline">
+        <Button nativeButton={false} render={<Link href="/dashboard/support/flows" />} variant="outline">
           <ArrowLeft className="size-3.5" />
           Back to flows
         </Button>
@@ -107,7 +107,7 @@ export function FlowEditor({ flowId }: { flowId: string }) {
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
       <div className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <Button render={<Link href="/dashboard/support/flows" />} variant="ghost" size="sm" className="-ml-2 self-start">
+          <Button nativeButton={false} render={<Link href="/dashboard/support/flows" />} variant="ghost" size="sm" className="-ml-2 self-start">
             <ArrowLeft className="size-3.5" />
             All flows
           </Button>

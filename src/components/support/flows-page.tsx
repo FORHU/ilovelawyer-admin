@@ -182,7 +182,7 @@ export function FlowsPage() {
                   <TableCell>{inMenus.length > 0 ? <Badge variant="secondary">{inMenus.length === 1 ? "Yes" : `${inMenus.length} cards`}</Badge> : <span className="text-muted-foreground text-xs">No</span>}</TableCell>
                   <TableCell>
                     <div className="flex justify-end">
-                      <Button render={<Link href={`/dashboard/support/flows/${encodeURIComponent(flow.id)}`} />} variant="ghost" size="icon-sm" aria-label={`Edit ${flow.title}`}>
+                      <Button nativeButton={false} render={<Link href={`/dashboard/support/flows/${encodeURIComponent(flow.id)}`} />} variant="ghost" size="icon-sm" aria-label={`Edit ${flow.title}`}>
                         <Pencil />
                       </Button>
                       <Button variant="ghost" size="icon-sm" aria-label={`Delete ${flow.title}`} onClick={() => setDeleting(flow)}>

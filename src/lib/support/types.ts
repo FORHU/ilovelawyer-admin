@@ -143,3 +143,90 @@ export const SUPPORT_LIMITS = {
   subtitleLength: 200,
   relatedFlows: 10,
 } as const
+
+// Support Tickets and the outcome report (ilovelawyer-api SupportTicketAdminCtrl).
+
+export type SupportTicketStatus = "OPEN" | "ANSWERED" | "RESOLVED"
+export type SupportTicketSource = "SIGNED_IN" | "SIGNED_OUT"
+export type SupportMessageAuthor = "CLIENT" | "ADMIN" | "SYSTEM"
+
+export interface SupportTicketRow {
+  id: string
+  status: SupportTicketStatus
+  source: SupportTicketSource
+  userId: string | null
+  email: string
+  name: string | null
+  flowId: string | null
+  firstMessage: string
+  createdAt: string
+  lastMessageAt: string
+  ageHours: number
+  /** OPEN and the client's last message is over 24 hours old. */
+  overdue: boolean
+}
+
+export interface SupportTicketPage {
+  total: number
+  page: number
+  pageSize: number
+  data: SupportTicketRow[]
+}
+
+/** What the chat attached when the ticket opened: ids, a status and a page path, never case content. */
+export interface SupportTicketContext {
+  name: string | null
+  email: string
+  flowPath: string[]
+  page: string | null
+  caseId: string | null
+  clientRequestId: string | null
+  clientRequestStatus: string | null
+}
+
+export interface SupportTicketMessage {
+  id: string
+  author: SupportMessageAuthor
+  authorName: string
+  body: string
+  createdAt: string
+}
+
+export interface SupportTicketDetail {
+  id: string
+  status: SupportTicketStatus
+  source: SupportTicketSource
+  userId: string | null
+  email: string
+  name: string | null
+  flowId: string | null
+  context: SupportTicketContext
+  createdAt: string
+  lastMessageAt: string
+  answeredAt: string | null
+  resolvedAt: string | null
+  clientReadAt: string | null
+  overdue: boolean
+  messages: SupportTicketMessage[]
+}
+
+export interface SupportReportFlow {
+  flowId: string
+  /** Null once the flow is no longer in the published content. */
+  flowTitle: string | null
+  started: number
+  helpedYes: number
+  helpedNo: number
+  escalated: number
+  helpedYesRate: number | null
+  helpedNoRate: number | null
+  escalationRate: number | null
+}
+
+export interface SupportReport {
+  from: string
+  to: string
+  totals: { started: number; helpedYes: number; helpedNo: number; escalated: number; unmatched: number; escalationRate: number | null }
+  flows: SupportReportFlow[]
+  unmatchedPhrases: { text: string; count: number }[]
+}
