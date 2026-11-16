@@ -13,8 +13,31 @@ export function refundAmountToMinor(input: string): number | null {
   return minor > 0 ? minor : null
 }
 
+/** How many decimals a currency has (2 for USD, 0 for KRW or JPY), from Intl's own currency data. */
+export function currencyDecimals(currency: string): number {
+  return new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2
+}
+
+/** An amount in its currency's smallest unit, for display: 2000 USD is "$20.00", 29000 KRW is
+ * "₩29,000" (won have no smaller unit). */
 export function formatMoney(money: Money): string {
-  return (money.amountMinor / 100).toLocaleString("en-US", { style: "currency", currency: money.currency })
+  return (money.amountMinor / 10 ** currencyDecimals(money.currency)).toLocaleString("en-US", { style: "currency", currency: money.currency })
+}
+
+/** A minor-unit amount as the admin types it: 2000 USD is "20", 2050 is "20.5", 29000 KRW is "29000". */
+export function minorToInput(amountMinor: number, currency: string): string {
+  return String(amountMinor / 10 ** currencyDecimals(currency))
+}
+
+/** What the admin typed, in the currency's smallest unit: "20.5" USD is 2050, "29000" KRW is 29000.
+ * Null for anything that isn't a non-negative amount with at most the currency's decimals (no
+ * fraction of a won). */
+export function inputToMinor(input: string, currency: string): number | null {
+  const decimals = currencyDecimals(currency)
+  const trimmed = input.trim()
+  const pattern = decimals === 0 ? /^\d+$/ : new RegExp(`^\\d+(\\.\\d{1,${decimals}})?$`)
+  if (!pattern.test(trimmed)) return null
+  return Math.round(Number(trimmed) * 10 ** decimals)
 }
 
 /** Several currencies side by side ("$12.00 · £5.00"); a dash when there's nothing. */

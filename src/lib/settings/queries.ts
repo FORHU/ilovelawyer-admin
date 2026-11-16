@@ -31,6 +31,10 @@ export interface AccountTopUpPricing {
 
 // ilovelawyer-api's PaymentPlan model — one admin-editable B2B subscription tier (Standard/Pro/Max
 // are placeholders) for a tenant: its fee, the AI allowance it includes, and its case limit.
+
+/** The currencies a lawyer's plan is priced in: each site's own (planCurrency), USD on PH and UK
+ * and won on KR. The API sets it; the admin edits only the amount. */
+export type PlanCurrency = "USD" | "KRW"
 export interface PaymentPlan {
   id: string
   code: string
@@ -40,7 +44,10 @@ export interface PaymentPlan {
   // Admin-only — never sent to a lawyer.
   adminNotes: string | null
   level: number
-  feeUsd: number
+  /** The monthly fee in `currency`'s smallest unit: cents, or whole won on KR (2000 is $20, 29000 is ₩29,000). */
+  priceMinor: number
+  currency: PlanCurrency
+  /** In US dollars on every site: it measures AI cost, not what the lawyer pays. */
   includedAllowanceUsd: number
   caseLimit: number
   /** Client requests (UK client hand-off) a lawyer on this tier can take on per calendar month. 0 = unlimited. */
@@ -61,6 +68,8 @@ export interface TenantSettings {
   pendingCount: number
   bulkApproval: BulkApprovalProgress | null
   accountTopUp: AccountTopUpPricing | null
+  /** The currency this site's tiers are priced in (KRW on KR), for a new tier too. */
+  planCurrency: PlanCurrency
   paymentPlans: PaymentPlan[]
 }
 
@@ -109,7 +118,8 @@ export interface PaymentPlanFields {
   description?: string
   adminNotes?: string
   level?: number
-  feeUsd: number
+  /** In the site's plan currency's smallest unit; the API sets the currency. */
+  priceMinor: number
   includedAllowanceUsd: number
   caseLimit: number
   clientRequestLimit?: number

@@ -11,8 +11,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+import { formatMoney, inputToMinor, minorToInput } from "@/components/billing/format"
 import {
   type PaymentPlan,
+  type PlanCurrency,
   type TenantSettings,
   useCreatePaymentPlanMutation,
   useUpdatePaymentPlanMutation,
@@ -26,7 +28,8 @@ interface Draft {
   name: string
   description: string
   adminNotes: string
-  feeUsd: string
+  /** The fee as typed, in major units of the site's currency: "20" dollars, or "29000" won. */
+  fee: string
   includedAllowanceUsd: string
   caseLimit: string
   clientRequestLimit: string
@@ -37,30 +40,57 @@ function draftFrom(plan: PaymentPlan): Draft {
     name: plan.name,
     description: plan.description ?? "",
     adminNotes: plan.adminNotes ?? "",
-    feeUsd: String(plan.feeUsd),
+    fee: minorToInput(plan.priceMinor, plan.currency),
     includedAllowanceUsd: String(plan.includedAllowanceUsd),
     caseLimit: String(plan.caseLimit),
     clientRequestLimit: String(plan.clientRequestLimit ?? 0),
   }
 }
 
-function parseDraft(draft: Draft) {
-  const feeUsd = Number(draft.feeUsd)
+const EMPTY_DRAFT: Draft = { name: "", description: "", adminNotes: "", fee: "", includedAllowanceUsd: "", caseLimit: "", clientRequestLimit: "" }
+
+function parseDraft(draft: Draft, currency: PlanCurrency) {
+  // Null for anything the currency can't hold, like part of a won.
+  const priceMinor = inputToMinor(draft.fee, currency)
   const includedAllowanceUsd = Number(draft.includedAllowanceUsd)
   const caseLimit = Number(draft.caseLimit)
   // Left empty (a new tier) it's 0: unlimited.
   const clientRequestLimit = Number(draft.clientRequestLimit || 0)
   const valid =
     draft.name.trim() !== "" &&
-    Number.isFinite(feeUsd) &&
-    feeUsd >= 0 &&
+    priceMinor !== null &&
     Number.isFinite(includedAllowanceUsd) &&
     includedAllowanceUsd >= 0 &&
     Number.isInteger(caseLimit) &&
     caseLimit >= 0 &&
     Number.isInteger(clientRequestLimit) &&
     clientRequestLimit >= 0
-  return { feeUsd, includedAllowanceUsd, caseLimit, clientRequestLimit, valid }
+  return { priceMinor: priceMinor ?? 0, includedAllowanceUsd, caseLimit, clientRequestLimit, valid }
+}
+
+/** The fee field, in the site's currency: whole won on KR, dollars and cents elsewhere. Shows the
+ * price as a lawyer will see it, so an extra zero stands out. */
+function FeeField({ currency, value, onChange }: { currency: PlanCurrency; value: string; onChange: (value: string) => void }) {
+  const minor = inputToMinor(value, currency)
+  const wholeUnits = currency === "KRW"
+  return (
+    <div className="flex flex-col gap-1">
+      <Label className="text-xs">Fee / month ({currency})</Label>
+      <Input
+        type="number"
+        min={0}
+        step={wholeUnits ? "1" : "0.01"}
+        inputMode={wholeUnits ? "numeric" : "decimal"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={value !== "" && minor === null}
+        className={wholeUnits ? "h-8 w-32" : "h-8 w-28"}
+      />
+      <span className="text-muted-foreground min-h-4 text-xs tabular-nums">
+        {value === "" ? null : minor === null ? (wholeUnits ? "Whole won only" : "Up to two decimals") : formatMoney({ amountMinor: minor, currency })}
+      </span>
+    </div>
+  )
 }
 
 function TierRow({
@@ -81,12 +111,12 @@ function TierRow({
   const [draft, setDraft] = useState<Draft>(() => draftFrom(plan))
   const updateMutation = useUpdatePaymentPlanMutation()
 
-  const parsed = parseDraft(draft)
+  const parsed = parseDraft(draft, plan.currency)
   const dirty =
     draft.name !== plan.name ||
     draft.description !== (plan.description ?? "") ||
     draft.adminNotes !== (plan.adminNotes ?? "") ||
-    parsed.feeUsd !== plan.feeUsd ||
+    parsed.priceMinor !== plan.priceMinor ||
     parsed.includedAllowanceUsd !== plan.includedAllowanceUsd ||
     parsed.caseLimit !== plan.caseLimit ||
     parsed.clientRequestLimit !== (plan.clientRequestLimit ?? 0)
@@ -101,7 +131,7 @@ function TierRow({
           name: draft.name.trim(),
           description: draft.description.trim(),
           adminNotes: draft.adminNotes.trim(),
-          feeUsd: parsed.feeUsd,
+          priceMinor: parsed.priceMinor,
           includedAllowanceUsd: parsed.includedAllowanceUsd,
           caseLimit: parsed.caseLimit,
           clientRequestLimit: parsed.clientRequestLimit,
@@ -154,10 +184,7 @@ function TierRow({
         />
       </div>
       <div className="flex flex-wrap gap-4">
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs">Fee (USD)</Label>
-          <Input type="number" min={0} step="0.01" value={draft.feeUsd} onChange={(e) => setDraft((d) => ({ ...d, feeUsd: e.target.value }))} className="h-8 w-28" />
-        </div>
+        <FeeField currency={plan.currency} value={draft.fee} onChange={(fee) => setDraft((d) => ({ ...d, fee }))} />
         <div className="flex flex-col gap-1">
           <Label className="text-xs">AI allowance (USD)</Label>
           <Input type="number" min={0} step="0.01" value={draft.includedAllowanceUsd} onChange={(e) => setDraft((d) => ({ ...d, includedAllowanceUsd: e.target.value }))} className="h-8 w-28" />
@@ -197,11 +224,11 @@ function TierRow({
   )
 }
 
-function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
+function AddTierRow({ tenantCode, currency }: { tenantCode: TenantSettings["code"]; currency: PlanCurrency }) {
   const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState<Draft>({ name: "", description: "", adminNotes: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "", clientRequestLimit: "" })
+  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
   const createMutation = useCreatePaymentPlanMutation()
-  const parsed = parseDraft(draft)
+  const parsed = parseDraft(draft, currency)
 
   if (!open) {
     return (
@@ -223,7 +250,7 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
           name: draft.name.trim(),
           description: draft.description.trim(),
           adminNotes: draft.adminNotes.trim(),
-          feeUsd: parsed.feeUsd,
+          priceMinor: parsed.priceMinor,
           includedAllowanceUsd: parsed.includedAllowanceUsd,
           caseLimit: parsed.caseLimit,
           clientRequestLimit: parsed.clientRequestLimit,
@@ -232,7 +259,7 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
       {
         onSuccess: () => {
           toast.success(`${draft.name.trim()} created`)
-          setDraft({ name: "", description: "", adminNotes: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "", clientRequestLimit: "" })
+          setDraft(EMPTY_DRAFT)
           setOpen(false)
         },
         onError: (err) => toast.error((err as Error).message),
@@ -262,10 +289,7 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
         />
       </div>
       <div className="flex flex-wrap gap-4">
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs">Fee (USD)</Label>
-          <Input type="number" min={0} step="0.01" value={draft.feeUsd} onChange={(e) => setDraft((d) => ({ ...d, feeUsd: e.target.value }))} className="h-8 w-28" />
-        </div>
+        <FeeField currency={currency} value={draft.fee} onChange={(fee) => setDraft((d) => ({ ...d, fee }))} />
         <div className="flex flex-col gap-1">
           <Label className="text-xs">AI allowance (USD)</Label>
           <Input type="number" min={0} step="0.01" value={draft.includedAllowanceUsd} onChange={(e) => setDraft((d) => ({ ...d, includedAllowanceUsd: e.target.value }))} className="h-8 w-28" />
@@ -354,7 +378,7 @@ export function PaymentPlansCard({ tenant }: { tenant: TenantSettings }) {
       </CardContent>
       <Separator />
       <CardFooter className="pt-4">
-        <AddTierRow tenantCode={tenant.code} />
+        <AddTierRow tenantCode={tenant.code} currency={tenant.planCurrency} />
       </CardFooter>
     </Card>
   )

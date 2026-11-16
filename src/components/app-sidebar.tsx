@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, ChevronRight, Cpu, DoorOpen, Loader2, Repeat, LogOut, MessageSquareText, Receipt, ScrollText, Settings, ShieldCheck, Users } from "lucide-react"
+import { BookOpen, ChevronRight, Cpu, DoorOpen, Loader2, Repeat, LogOut, MessageSquareText, Receipt, ScrollText, Settings, ShieldCheck, Tags, Users } from "lucide-react"
 
 import {
   AlertDialog,
@@ -37,32 +37,30 @@ import { useLogoutMutation } from "@/lib/auth/mutations"
 import { LAWYER_SITES } from "@/lib/lawyers/queries"
 import { useAuthStore } from "@/lib/store/auth.store"
 
-type NavItem = { title: string; url: string; icon: typeof Users }
+/** A sidebar item. `perSite`: a section split by site, with one sub-item per site under it (UK, PH,
+ * KR), each its own page. */
+type NavItem = { title: string; url: string; icon: typeof Users; perSite?: boolean }
 
-// Lawyer applications and Practice Area, each split by site, sit between these two lists.
-const navItemsBefore: NavItem[] = [{ title: "Users", url: "/dashboard/users", icon: Users }]
-const navItemsAfter: NavItem[] = [
+const navItems: NavItem[] = [
+  { title: "Users", url: "/dashboard/users", icon: Users },
+  { title: "Lawyer applications", url: "/dashboard/lawyers", icon: ShieldCheck, perSite: true },
+  { title: "Practice Area", url: "/dashboard/practice-areas", icon: BookOpen, perSite: true },
   { title: "Audit trail", url: "/dashboard/audit", icon: ScrollText },
   { title: "Feedback", url: "/dashboard/feedback", icon: MessageSquareText },
   { title: "Billing", url: "/dashboard/billing", icon: Receipt },
-  { title: "Lawyer subscriptions", url: "/dashboard/lawyer-subscriptions", icon: Repeat },
+  // Each site's plans are priced in its own currency (won on KR), so plans and subscriptions are
+  // per site too.
+  { title: "Payment plans", url: "/dashboard/payment-plans", icon: Tags, perSite: true },
+  { title: "Lawyer subscriptions", url: "/dashboard/lawyer-subscriptions", icon: Repeat, perSite: true },
   { title: "Lawyer exits", url: "/dashboard/lawyer-exits", icon: DoorOpen },
   { title: "LLM Usage", url: "/dashboard/llm-usage", icon: Cpu },
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ]
 
-/** A section split by site: one sub-item per site under it (UK, PH, KR), each with its own tabs on
- * the page. */
-type SiteNavItem = { title: string; url: string; icon: typeof Users }
-const siteNavItems: SiteNavItem[] = [
-  { title: "Lawyer applications", url: "/dashboard/lawyers", icon: ShieldCheck },
-  { title: "Practice Area", url: "/dashboard/practice-areas", icon: BookOpen },
-]
-
-/** A section split by site, like Lawyer applications (status tabs) and Practice Area (practice areas
- * and case types). Clicking it opens UK (the default) and shows every site under it; it stays open
+/** A section split by site, like Lawyer applications (status tabs), Practice Area (practice areas
+ * and case types), Payment plans and Lawyer subscriptions. Clicking it opens UK (the default) and shows every site under it; it stays open
  * while any of those pages is. */
-function SiteNav({ item, pathname }: { item: SiteNavItem; pathname: string }) {
+function SiteNav({ item, pathname }: { item: NavItem; pathname: string }) {
   const open = pathname === item.url || pathname.startsWith(`${item.url}/`)
   const sites = LAWYER_SITES.map((site) => ({ title: site, url: `${item.url}/${site.toLowerCase()}` }))
   return (
@@ -123,15 +121,9 @@ export function AppSidebar() {
           <SidebarGroupLabel>Manage</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItemsBefore.map((item) => (
-                <NavLink key={item.url} item={item} pathname={pathname} />
-              ))}
-              {siteNavItems.map((item) => (
-                <SiteNav key={item.url} item={item} pathname={pathname} />
-              ))}
-              {navItemsAfter.map((item) => (
-                <NavLink key={item.url} item={item} pathname={pathname} />
-              ))}
+              {navItems.map((item) =>
+                item.perSite ? <SiteNav key={item.url} item={item} pathname={pathname} /> : <NavLink key={item.url} item={item} pathname={pathname} />
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
