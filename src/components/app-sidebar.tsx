@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, ChevronRight, Cpu, DoorOpen, LifeBuoy, Loader2, Repeat, LogOut, MessageSquareText, Receipt, ScrollText, Settings, ShieldCheck, Users } from "lucide-react"
+import { BookOpen, ChevronRight, Cpu, DoorOpen, LifeBuoy, Loader2, Repeat, LogOut, MessageSquareText, Receipt, ScrollText, Settings, Shuffle, ShieldCheck, Users } from "lucide-react"
 
 import {
   AlertDialog,
@@ -50,6 +50,7 @@ const navItemsAfter: NavItem[] = [
   { title: "Lawyer subscriptions", url: "/dashboard/lawyer-subscriptions", icon: Repeat },
   { title: "Lawyer exits", url: "/dashboard/lawyer-exits", icon: DoorOpen },
   { title: "LLM Usage", url: "/dashboard/llm-usage", icon: Cpu },
+  { title: "Model Routing", url: "/dashboard/persona-routing", icon: Shuffle },
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ]
 
