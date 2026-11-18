@@ -134,7 +134,7 @@ export default function QuotePaymentsPage() {
     <div className="flex flex-col gap-4">
       <p className="text-muted-foreground text-sm">
         What clients have paid for lawyers&apos; quotes. ilovelawyer deducts its platform fee and the rest goes to the lawyer&apos;s wallet (Lawyer exits → Lawyer
-        wallets). When a lawyer can&apos;t continue, the refund is decided in Lawyer exits. The fee and the hold are set per tenant in Settings.
+        wallets). When a lawyer can&apos;t continue, the refund is decided in Lawyer exits. The fee and the hold are set per site in Payment plans.
       </p>
       <PaymentsCard />
     </div>

@@ -15,7 +15,7 @@ export type PaymentProvider = "DUMMY" | "STRIPE" | "FREE"
 export type RefundStatus = "PENDING" | "SUCCEEDED" | "FAILED"
 
 export interface Money {
-  /** Cents. */
+  /** In the currency's smallest unit: cents, or whole won for KRW (which has none smaller). */
   amountMinor: number
   currency: string
 }

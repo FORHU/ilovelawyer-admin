@@ -64,7 +64,7 @@ export default function UsersPage() {
       </div>
       {autoApproveTenants.length > 0 && (
         <p className="bg-muted text-muted-foreground rounded-md px-3 py-2 text-sm">
-          Auto-approve is on for {autoApproveTenants.map((t) => t.code).join(" and ")}. New signups there skip this
+          Auto-approve is on for {new Intl.ListFormat("en", { type: "conjunction" }).format(autoApproveTenants.map((t) => t.code))}. New signups there skip this
           queue once their email is verified.{" "}
           <Link href="/dashboard/settings" className="text-foreground underline underline-offset-2">
             Change in Settings

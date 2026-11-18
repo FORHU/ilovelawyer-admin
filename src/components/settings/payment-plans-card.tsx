@@ -11,8 +11,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+import { currencyDecimals, formatMoney, inputToMinor, minorToInput } from "@/components/billing/format"
 import {
   type PaymentPlan,
+  type PlanCurrency,
   type TenantSettings,
   useCreatePaymentPlanMutation,
   useUpdatePaymentPlanMutation,
@@ -26,50 +28,97 @@ interface Draft {
   name: string
   description: string
   adminNotes: string
-  feeUsd: string
-  includedAllowanceUsd: string
+  /** The fee as typed, in major units of the site's currency: "20" dollars, or "29000" won. */
+  fee: string
+  /** The AI allowance as typed, in the site's currency (won on KR); stored in dollars. */
+  aiAllowance: string
   caseLimit: string
   clientRequestLimit: string
 }
 
-function draftFrom(plan: PaymentPlan): Draft {
+/** How the site shows AI usage: in its plan currency, at its top-up rate (₩1,400 per $1 on KR; 1 on
+ * a US-dollar site). The API keeps the allowance in dollars, which is what AI costs. */
+interface AllowanceUnit {
+  currency: PlanCurrency
+  perUsd: number
+}
+
+/** A dollar allowance in the site currency's smallest unit: $10 is ₩14,000 at ₩1,400. */
+function allowanceMinorOf(usd: number, unit: AllowanceUnit): number {
+  return Math.round(usd * unit.perUsd * 10 ** currencyDecimals(unit.currency))
+}
+
+function draftFrom(plan: PaymentPlan, unit: AllowanceUnit): Draft {
   return {
     name: plan.name,
     description: plan.description ?? "",
     adminNotes: plan.adminNotes ?? "",
-    feeUsd: String(plan.feeUsd),
-    includedAllowanceUsd: String(plan.includedAllowanceUsd),
+    fee: minorToInput(plan.priceMinor, plan.currency),
+    aiAllowance: minorToInput(allowanceMinorOf(plan.includedAllowanceUsd, unit), unit.currency),
     caseLimit: String(plan.caseLimit),
     clientRequestLimit: String(plan.clientRequestLimit ?? 0),
   }
 }
 
-function parseDraft(draft: Draft) {
-  const feeUsd = Number(draft.feeUsd)
-  const includedAllowanceUsd = Number(draft.includedAllowanceUsd)
+const EMPTY_DRAFT: Draft = { name: "", description: "", adminNotes: "", fee: "", aiAllowance: "", caseLimit: "", clientRequestLimit: "" }
+
+function parseDraft(draft: Draft, unit: AllowanceUnit) {
+  // Null for anything the currency can't hold, like part of a won.
+  const priceMinor = inputToMinor(draft.fee, unit.currency)
+  const allowanceMinor = inputToMinor(draft.aiAllowance, unit.currency)
+  // Back to dollars for the API, unrounded, so the same won amount shows again next time.
+  const includedAllowanceUsd = allowanceMinor === null ? NaN : allowanceMinor / 10 ** currencyDecimals(unit.currency) / unit.perUsd
   const caseLimit = Number(draft.caseLimit)
   // Left empty (a new tier) it's 0: unlimited.
   const clientRequestLimit = Number(draft.clientRequestLimit || 0)
   const valid =
     draft.name.trim() !== "" &&
-    Number.isFinite(feeUsd) &&
-    feeUsd >= 0 &&
+    priceMinor !== null &&
     Number.isFinite(includedAllowanceUsd) &&
     includedAllowanceUsd >= 0 &&
     Number.isInteger(caseLimit) &&
     caseLimit >= 0 &&
     Number.isInteger(clientRequestLimit) &&
     clientRequestLimit >= 0
-  return { feeUsd, includedAllowanceUsd, caseLimit, clientRequestLimit, valid }
+  return { priceMinor: priceMinor ?? 0, allowanceMinor: allowanceMinor ?? 0, includedAllowanceUsd, caseLimit, clientRequestLimit, valid }
+}
+
+/** The fee field, in the site's currency: whole won on KR, dollars and cents elsewhere. Shows the
+ * price as a lawyer will see it, so an extra zero stands out. */
+export function FeeField({ currency, value, onChange, label = "Fee / month" }: { currency: PlanCurrency; value: string; onChange: (value: string) => void; label?: string }) {
+  const minor = inputToMinor(value, currency)
+  const wholeUnits = currencyDecimals(currency) === 0
+  return (
+    <div className="flex flex-col gap-1">
+      <Label className="text-xs">
+        {label} ({currency})
+      </Label>
+      <Input
+        type="number"
+        min={0}
+        step={wholeUnits ? "1" : "0.01"}
+        inputMode={wholeUnits ? "numeric" : "decimal"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={value !== "" && minor === null}
+        className={wholeUnits ? "h-8 w-32" : "h-8 w-28"}
+      />
+      <span className="text-muted-foreground min-h-4 text-xs tabular-nums">
+        {value === "" ? null : minor === null ? (wholeUnits ? `Whole ${currency} only` : "Up to two decimals") : formatMoney({ amountMinor: minor, currency })}
+      </span>
+    </div>
+  )
 }
 
 function TierRow({
   tenantCode,
   plan,
+  unit,
   onDirtyChange,
 }: {
   tenantCode: TenantSettings["code"]
   plan: PaymentPlan
+  unit: AllowanceUnit
   /** Reports this row's current save-eligibility to the parent, so "Save all" can reach it — see
    * PaymentPlansCard. Re-registers every render (not just on dirty/valid change) so the closure
    * "Save all" calls always has this row's latest draft, never a stale one from an earlier render. */
@@ -78,16 +127,16 @@ function TierRow({
   // Seeded once from the server value at mount — the parent remounts this whole card (via `key`,
   // keyed on every tier's updatedAt) whenever a tier actually changes on the server, which re-seeds
   // naturally; a save-in-flight is never clobbered.
-  const [draft, setDraft] = useState<Draft>(() => draftFrom(plan))
+  const [draft, setDraft] = useState<Draft>(() => draftFrom(plan, unit))
   const updateMutation = useUpdatePaymentPlanMutation()
 
-  const parsed = parseDraft(draft)
+  const parsed = parseDraft(draft, unit)
   const dirty =
     draft.name !== plan.name ||
     draft.description !== (plan.description ?? "") ||
     draft.adminNotes !== (plan.adminNotes ?? "") ||
-    parsed.feeUsd !== plan.feeUsd ||
-    parsed.includedAllowanceUsd !== plan.includedAllowanceUsd ||
+    parsed.priceMinor !== plan.priceMinor ||
+    parsed.allowanceMinor !== allowanceMinorOf(plan.includedAllowanceUsd, unit) ||
     parsed.caseLimit !== plan.caseLimit ||
     parsed.clientRequestLimit !== (plan.clientRequestLimit ?? 0)
 
@@ -101,7 +150,7 @@ function TierRow({
           name: draft.name.trim(),
           description: draft.description.trim(),
           adminNotes: draft.adminNotes.trim(),
-          feeUsd: parsed.feeUsd,
+          priceMinor: parsed.priceMinor,
           includedAllowanceUsd: parsed.includedAllowanceUsd,
           caseLimit: parsed.caseLimit,
           clientRequestLimit: parsed.clientRequestLimit,
@@ -154,14 +203,8 @@ function TierRow({
         />
       </div>
       <div className="flex flex-wrap gap-4">
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs">Fee (USD)</Label>
-          <Input type="number" min={0} step="0.01" value={draft.feeUsd} onChange={(e) => setDraft((d) => ({ ...d, feeUsd: e.target.value }))} className="h-8 w-28" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs">AI allowance (USD)</Label>
-          <Input type="number" min={0} step="0.01" value={draft.includedAllowanceUsd} onChange={(e) => setDraft((d) => ({ ...d, includedAllowanceUsd: e.target.value }))} className="h-8 w-28" />
-        </div>
+        <FeeField currency={plan.currency} value={draft.fee} onChange={(fee) => setDraft((d) => ({ ...d, fee }))} />
+        <FeeField label="AI allowance / month" currency={unit.currency} value={draft.aiAllowance} onChange={(aiAllowance) => setDraft((d) => ({ ...d, aiAllowance }))} />
         <div className="flex flex-col gap-1">
           <Label className="text-xs">Case limit</Label>
           <Input type="number" min={0} step="1" value={draft.caseLimit} onChange={(e) => setDraft((d) => ({ ...d, caseLimit: e.target.value }))} className="h-8 w-24" />
@@ -197,11 +240,11 @@ function TierRow({
   )
 }
 
-function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
+function AddTierRow({ tenantCode, currency, unit }: { tenantCode: TenantSettings["code"]; currency: PlanCurrency; unit: AllowanceUnit }) {
   const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState<Draft>({ name: "", description: "", adminNotes: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "", clientRequestLimit: "" })
+  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
   const createMutation = useCreatePaymentPlanMutation()
-  const parsed = parseDraft(draft)
+  const parsed = parseDraft(draft, unit)
 
   if (!open) {
     return (
@@ -223,7 +266,7 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
           name: draft.name.trim(),
           description: draft.description.trim(),
           adminNotes: draft.adminNotes.trim(),
-          feeUsd: parsed.feeUsd,
+          priceMinor: parsed.priceMinor,
           includedAllowanceUsd: parsed.includedAllowanceUsd,
           caseLimit: parsed.caseLimit,
           clientRequestLimit: parsed.clientRequestLimit,
@@ -232,7 +275,7 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
       {
         onSuccess: () => {
           toast.success(`${draft.name.trim()} created`)
-          setDraft({ name: "", description: "", adminNotes: "", feeUsd: "", includedAllowanceUsd: "", caseLimit: "", clientRequestLimit: "" })
+          setDraft(EMPTY_DRAFT)
           setOpen(false)
         },
         onError: (err) => toast.error((err as Error).message),
@@ -262,14 +305,8 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
         />
       </div>
       <div className="flex flex-wrap gap-4">
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs">Fee (USD)</Label>
-          <Input type="number" min={0} step="0.01" value={draft.feeUsd} onChange={(e) => setDraft((d) => ({ ...d, feeUsd: e.target.value }))} className="h-8 w-28" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs">AI allowance (USD)</Label>
-          <Input type="number" min={0} step="0.01" value={draft.includedAllowanceUsd} onChange={(e) => setDraft((d) => ({ ...d, includedAllowanceUsd: e.target.value }))} className="h-8 w-28" />
-        </div>
+        <FeeField currency={currency} value={draft.fee} onChange={(fee) => setDraft((d) => ({ ...d, fee }))} />
+        <FeeField label="AI allowance / month" currency={unit.currency} value={draft.aiAllowance} onChange={(aiAllowance) => setDraft((d) => ({ ...d, aiAllowance }))} />
         <div className="flex flex-col gap-1">
           <Label className="text-xs">Case limit</Label>
           <Input type="number" min={0} step="1" value={draft.caseLimit} onChange={(e) => setDraft((d) => ({ ...d, caseLimit: e.target.value }))} className="h-8 w-24" />
@@ -312,6 +349,8 @@ function AddTierRow({ tenantCode }: { tenantCode: TenantSettings["code"] }) {
  */
 export function PaymentPlansCard({ tenant }: { tenant: TenantSettings }) {
   const plans = [...tenant.paymentPlans].sort((a, b) => a.level - b.level)
+  // AI allowances are shown in the site's currency at its top-up rate (won on KR).
+  const unit: AllowanceUnit = { currency: tenant.planCurrency, perUsd: tenant.accountTopUp?.perUsd ?? 1 }
 
   // Each TierRow owns its own draft state (see its comment) and still saves independently via its
   // own Save button — this just also lets "Save all" reach every dirty row's latest save() at
@@ -349,12 +388,12 @@ export function PaymentPlansCard({ tenant }: { tenant: TenantSettings }) {
         <p className="text-muted-foreground">A lawyer picks one of these at signup and can upgrade later. Stripe billing isn&apos;t live yet, so no fee is charged.</p>
         {plans.length === 0 && <p className="text-muted-foreground text-sm">No tiers yet.</p>}
         {plans.map((plan) => (
-          <TierRow key={plan.id} tenantCode={tenant.code} plan={plan} onDirtyChange={handleDirtyChange} />
+          <TierRow key={plan.id} tenantCode={tenant.code} plan={plan} unit={unit} onDirtyChange={handleDirtyChange} />
         ))}
       </CardContent>
       <Separator />
       <CardFooter className="pt-4">
-        <AddTierRow tenantCode={tenant.code} />
+        <AddTierRow tenantCode={tenant.code} currency={tenant.planCurrency} unit={unit} />
       </CardFooter>
     </Card>
   )
