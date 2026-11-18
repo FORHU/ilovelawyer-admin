@@ -20,6 +20,7 @@ import {
   useLlmUsagePeopleQuery,
   useLlmUsageSummaryQuery,
 } from "@/lib/llm-usage/queries"
+import { usePersonaRoutingOverridesQuery } from "@/lib/persona-routing/queries"
 
 const PAGE_SIZE = 25
 const DEBOUNCE_MS = 400
@@ -58,6 +59,29 @@ function StatCard({ title, value, note }: { title: string; value: string; note: 
         <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
       </CardHeader>
       <CardContent className="text-muted-foreground text-sm">{note}</CardContent>
+    </Card>
+  )
+}
+
+/** Which personas are currently pinned (CW-8) vs on AUTO, so this page answers "what model is
+ * actually running, right now" without leaving it for the separate Model Routing settings page.
+ * Only overridden personas have a row here -- everything else is implicitly AUTO. */
+function PersonaRoutingSummary() {
+  const overrides = usePersonaRoutingOverridesQuery()
+  if (!overrides.data || overrides.data.length === 0) return null
+  return (
+    <Card>
+      <CardHeader>
+        <CardDescription>Current routing (persona overrides)</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap gap-2">
+        {overrides.data.map((o) => (
+          <span key={o.persona} className="flex items-center gap-1.5 text-sm">
+            <Badge variant={o.routingMode === "MANUAL" ? "default" : "secondary"}>{o.persona}</Badge>
+            <span className="text-muted-foreground">{o.routingMode === "MANUAL" ? `pinned to ${o.manualPinnedModel}` : "auto"}</span>
+          </span>
+        ))}
+      </CardContent>
     </Card>
   )
 }
@@ -169,12 +193,15 @@ export default function LlmUsagePage() {
   const [organizationId, setOrganizationId] = React.useState("")
   const [userId, setUserId] = React.useState("")
   const [feature, setFeature] = React.useState("")
+  const [routingMode, setRoutingMode] = React.useState<"AUTO" | "MANUAL" | "">("")
+  const [decisionSource, setDecisionSource] = React.useState("")
   // The page a user picked, remembered with the filters it was picked under: changing a filter
   // drops back to page 1 without an effect.
   const [picked, setPicked] = React.useState({ key: "", page: 1 })
 
   const debouncedModel = useDebounced(model.trim())
   const debouncedFeature = useDebounced(feature.trim())
+  const debouncedDecisionSource = useDebounced(decisionSource.trim())
 
   // `to` is exclusive in the API, so the picked day is included by sending the day after it.
   const filters = React.useMemo<LlmUsageFilters>(
@@ -187,8 +214,10 @@ export default function LlmUsagePage() {
       organizationId: organizationId || undefined,
       userId: userId || undefined,
       feature: debouncedFeature || undefined,
+      routingMode: routingMode || undefined,
+      decisionSource: debouncedDecisionSource || undefined,
     }),
-    [from, to, provider, source, debouncedModel, organizationId, userId, debouncedFeature],
+    [from, to, provider, source, debouncedModel, organizationId, userId, debouncedFeature, routingMode, debouncedDecisionSource],
   )
 
   const filtersKey = JSON.stringify(filters)
@@ -212,6 +241,8 @@ export default function LlmUsagePage() {
           verified price yet, not that the call was free.
         </p>
       </div>
+
+      <PersonaRoutingSummary />
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs">
@@ -241,6 +272,18 @@ export default function LlmUsagePage() {
         <label className="flex flex-col gap-1 text-xs">
           Model
           <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="Exact name" className="w-44" />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Routing mode
+          <select className={selectClass} value={routingMode} onChange={(e) => setRoutingMode(e.target.value as "AUTO" | "MANUAL" | "")}>
+            <option value="">All</option>
+            <option value="AUTO">Auto</option>
+            <option value="MANUAL">Manual</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Decision source
+          <Input value={decisionSource} onChange={(e) => setDecisionSource(e.target.value)} placeholder="e.g. race_corrected" className="w-44" />
         </label>
         <label className="flex flex-col gap-1 text-xs">
           User

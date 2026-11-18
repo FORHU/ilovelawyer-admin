@@ -89,6 +89,20 @@ export const columns: ColumnDef<LlmUsageRow>[] = [
   { id: "output", header: "Output", enableSorting: false, cell: ({ row }) => tokens(row.original.outputTokens, row.original) },
   { id: "passes", header: "Passes", enableSorting: false, cell: ({ row }) => row.original.passCount ?? "—" },
   {
+    id: "routing",
+    header: "Routing",
+    enableSorting: false,
+    cell: ({ row }) =>
+      row.original.routingMode ? (
+        <span className="flex items-center gap-1.5 whitespace-nowrap">
+          <Badge variant={row.original.routingMode === "MANUAL" ? "default" : "secondary"}>{row.original.routingMode}</Badge>
+          {row.original.decisionSource && <span className="text-muted-foreground text-xs">{row.original.decisionSource}</span>}
+        </span>
+      ) : (
+        "—"
+      ),
+  },
+  {
     id: "cost",
     header: "Cost",
     enableSorting: false,
