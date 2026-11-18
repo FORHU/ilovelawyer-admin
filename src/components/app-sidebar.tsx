@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, ChevronRight, Cpu, DoorOpen, LifeBuoy, Loader2, Repeat, LogOut, MessageSquareText, Receipt, ScrollText, Settings, Shuffle, ShieldCheck, Users } from "lucide-react"
+import { BookOpen, ChevronRight, Cpu, DoorOpen, LifeBuoy, Loader2, Repeat, LogOut, MessageSquareText, Receipt, ScrollText, Settings, Shuffle, ShieldCheck, Tags, Users } from "lucide-react"
 
 import {
   AlertDialog,
@@ -34,46 +34,49 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 import { useLogoutMutation } from "@/lib/auth/mutations"
+import { LAWYER_SITES } from "@/lib/lawyers/queries"
 import { useAuthStore } from "@/lib/store/auth.store"
 
-type NavItem = { title: string; url: string; icon: typeof Users }
+/** A sidebar item. `perSite`: a section split by site, with one sub-item per site under it (UK, PH,
+ * KR), each its own page. */
+type NavItem = { title: string; url: string; icon: typeof Users; perSite?: boolean }
 
-// Practice Area and Support Chat sit between these two lists, right after Lawyer applications.
+// Support Chat sits between these two lists, right after Practice Area.
 const navItemsBefore: NavItem[] = [
   { title: "Users", url: "/dashboard/users", icon: Users },
-  { title: "Lawyer applications", url: "/dashboard/lawyers", icon: ShieldCheck },
+  { title: "Lawyer applications", url: "/dashboard/lawyers", icon: ShieldCheck, perSite: true },
+  { title: "Practice Area", url: "/dashboard/practice-areas", icon: BookOpen, perSite: true },
 ]
 const navItemsAfter: NavItem[] = [
   { title: "Audit trail", url: "/dashboard/audit", icon: ScrollText },
   { title: "Feedback", url: "/dashboard/feedback", icon: MessageSquareText },
   { title: "Billing", url: "/dashboard/billing", icon: Receipt },
-  { title: "Lawyer subscriptions", url: "/dashboard/lawyer-subscriptions", icon: Repeat },
+  // Each site's plans are priced in its own currency (won on KR), so plans and subscriptions are
+  // per site too.
+  { title: "Payment plans", url: "/dashboard/payment-plans", icon: Tags, perSite: true },
+  { title: "Lawyer subscriptions", url: "/dashboard/lawyer-subscriptions", icon: Repeat, perSite: true },
   { title: "Lawyer exits", url: "/dashboard/lawyer-exits", icon: DoorOpen },
   { title: "LLM Usage", url: "/dashboard/llm-usage", icon: Cpu },
   { title: "Model Routing", url: "/dashboard/persona-routing", icon: Shuffle },
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ]
 
-const PRACTICE_AREAS_URL = "/dashboard/practice-areas"
-const practiceAreaSites = [
-  { title: "UK", url: `${PRACTICE_AREAS_URL}/uk` },
-  { title: "PH", url: `${PRACTICE_AREAS_URL}/ph` },
-]
-
-/** Each site's practice areas and client case types (tabs on the site's page). Clicking it opens
- * UK (the default) and shows both sites under it; it stays open while any of those pages is. */
-function PracticeAreaNav({ pathname }: { pathname: string }) {
-  const open = pathname.startsWith(PRACTICE_AREAS_URL)
+/** A section split by site, like Lawyer applications (status tabs), Practice Area (practice areas
+ * and case types), Payment plans and Lawyer subscriptions. Clicking it opens UK (the default) and shows every site under it; it stays open
+ * while any of those pages is. */
+function SiteNav({ item, pathname }: { item: NavItem; pathname: string }) {
+  const open = pathname === item.url || pathname.startsWith(`${item.url}/`)
+  const sites = LAWYER_SITES.map((site) => ({ title: site, url: `${item.url}/${site.toLowerCase()}` }))
   return (
     <Collapsible open={open} render={<SidebarMenuItem />}>
-      <SidebarMenuButton render={<Link href={practiceAreaSites[0].url} />} isActive={open} aria-expanded={open}>
-        <BookOpen />
-        <span>Practice Area</span>
+      <SidebarMenuButton render={<Link href={sites[0].url} />} isActive={open} aria-expanded={open}>
+        <item.icon />
+        <span>{item.title}</span>
         <ChevronRight className={`ml-auto transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
       </SidebarMenuButton>
       <CollapsibleContent>
         <SidebarMenuSub>
-          {practiceAreaSites.map((site) => (
+          {sites.map((site) => (
             <SidebarMenuSubItem key={site.url}>
               <SidebarMenuSubButton render={<Link href={site.url} />} isActive={pathname === site.url || pathname.startsWith(`${site.url}/`)}>
                 <span>{site.title}</span>
@@ -135,6 +138,10 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   )
 }
 
+function navEntry(item: NavItem, pathname: string) {
+  return item.perSite ? <SiteNav key={item.url} item={item} pathname={pathname} /> : <NavLink key={item.url} item={item} pathname={pathname} />
+}
+
 export function AppSidebar() {
   const pathname = usePathname()
   const user = useAuthStore((s) => s.user)
@@ -160,14 +167,9 @@ export function AppSidebar() {
           <SidebarGroupLabel>Manage</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItemsBefore.map((item) => (
-                <NavLink key={item.url} item={item} pathname={pathname} />
-              ))}
-              <PracticeAreaNav pathname={pathname} />
+              {navItemsBefore.map((item) => navEntry(item, pathname))}
               <SupportChatNav pathname={pathname} />
-              {navItemsAfter.map((item) => (
-                <NavLink key={item.url} item={item} pathname={pathname} />
-              ))}
+              {navItemsAfter.map((item) => navEntry(item, pathname))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
