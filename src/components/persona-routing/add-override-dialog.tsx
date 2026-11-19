@@ -16,11 +16,11 @@ import { type RoutingMode, useUpdatePersonaRoutingOverrideMutation } from "@/lib
  * routing overrides entirely -- listing them here would let an admin "set" something inert. */
 const KNOWN_PERSONAS = ["legal", "legal_uk", "legal_kr", "intake", "intake_kr"] as const
 
-/** Models model_registry.py knows about AND the_server.py can actually call. deepseek-chat/
- * deepseek-reasoner are in model_registry.py's _MODEL_SPECS but the_server.py builds only an
- * OpenAI client -- there is no DeepSeek routing at all, so pinning to one would make the real
- * completion call fail. Excluded here on purpose until that's wired up. */
-export const KNOWN_MODELS = ["gpt-5.6-luna", "gpt-6-luna", "gpt-5.6-terra"] as const
+/** Models model_registry.py knows about and the_server.py can actually call. run_function_chain
+ * (the real completion path _model flows into) calls model_registry.get_client/shape_chat_args
+ * for every model, including deepseek-chat/deepseek-reasoner -- that dispatch is real: a real
+ * DeepSeek client, real base URL, real thinking-mode/reasoning_effort handling. */
+export const KNOWN_MODELS = ["gpt-5.6-luna", "gpt-6-luna", "gpt-5.6-terra", "deepseek-chat", "deepseek-reasoner"] as const
 
 export function AddOverrideDialog({ existing }: { existing: string[] }) {
   const [open, setOpen] = useState(false)
