@@ -6,13 +6,22 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { type RoutingMode, useUpdatePersonaRoutingOverrideMutation } from "@/lib/persona-routing/queries"
 
-/** Adds a new override row. The persona name is free text -- this API only stores overrides,
- * chat-wonder-v2-api owns the actual persona list, so there is nothing here to validate it against. */
+/** Personas chat-wonder-v2-api's model_router.py actually calls decide_turn_model for
+ * (the_server.py's _legal_model_override/_intake_model_override call sites). Every other
+ * persona (stylist, garment, maps, cosmetics, nav, tailor) runs on CHAT_MODEL and ignores
+ * routing overrides entirely -- listing them here would let an admin "set" something inert. */
+const KNOWN_PERSONAS = ["legal", "legal_uk", "legal_kr", "intake", "intake_kr"] as const
+
+/** Models model_registry.py knows about AND the_server.py can actually call. deepseek-chat/
+ * deepseek-reasoner are in model_registry.py's _MODEL_SPECS but the_server.py builds only an
+ * OpenAI client -- there is no DeepSeek routing at all, so pinning to one would make the real
+ * completion call fail. Excluded here on purpose until that's wired up. */
+export const KNOWN_MODELS = ["gpt-5.6-luna", "gpt-6-luna", "gpt-5.6-terra"] as const
+
 export function AddOverrideDialog({ existing }: { existing: string[] }) {
   const [open, setOpen] = useState(false)
   const [persona, setPersona] = useState("")
@@ -20,6 +29,7 @@ export function AddOverrideDialog({ existing }: { existing: string[] }) {
   const [pinnedModel, setPinnedModel] = useState("")
   const update = useUpdatePersonaRoutingOverrideMutation()
 
+  const availablePersonas = KNOWN_PERSONAS.filter((p) => !existing.includes(p))
   const personaError = persona.trim() === "" ? null : existing.includes(persona.trim()) ? "Already has an override — edit it in the table instead." : null
   const pinError = routingMode === "MANUAL" && pinnedModel.trim() === "" ? "Required for MANUAL." : null
   const canSave = persona.trim() !== "" && !personaError && !pinError
@@ -67,9 +77,24 @@ export function AddOverrideDialog({ existing }: { existing: string[] }) {
         </DialogHeader>
         <div className="flex flex-col gap-2">
           <Label htmlFor="persona-name" className="font-normal select-text">
-            Persona name — as chat-wonder-v2-api knows it (e.g. legal_uk, stylist, intake)
+            Persona
           </Label>
-          <Input id="persona-name" value={persona} onChange={(e) => setPersona(e.target.value)} aria-invalid={!!personaError} />
+          <Select
+            items={availablePersonas.map((p) => ({ value: p, label: p }))}
+            value={persona}
+            onValueChange={(v) => setPersona(v ?? "")}
+          >
+            <SelectTrigger id="persona-name" aria-invalid={!!personaError}>
+              <SelectValue placeholder="Select a persona..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availablePersonas.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {personaError && <p className="text-destructive text-xs">{personaError}</p>}
         </div>
         <div className="flex flex-col gap-2">
@@ -96,7 +121,18 @@ export function AddOverrideDialog({ existing }: { existing: string[] }) {
             <Label htmlFor="pinned-model" className="font-normal select-text">
               Pinned model
             </Label>
-            <Input id="pinned-model" placeholder="gpt-6-luna" value={pinnedModel} onChange={(e) => setPinnedModel(e.target.value)} aria-invalid={!!pinError} />
+            <Select items={KNOWN_MODELS.map((m) => ({ value: m, label: m }))} value={pinnedModel} onValueChange={(v) => setPinnedModel(v ?? "")}>
+              <SelectTrigger id="pinned-model" aria-invalid={!!pinError}>
+                <SelectValue placeholder="Select a model..." />
+              </SelectTrigger>
+              <SelectContent>
+                {KNOWN_MODELS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {pinError && <p className="text-destructive text-xs">{pinError}</p>}
           </div>
         )}
