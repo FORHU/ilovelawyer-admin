@@ -15,6 +15,11 @@ export interface LlmUsageFilters {
   // An id, or NO_PERSON for rows that name none (background work nobody could be attributed to).
   userId?: string
   organizationId?: string
+  // chat-wonder-v2-api#150/#151 (CW-9/CW-10): free strings, not a fixed set -- the API's own
+  // filter validation is free-text too, so a persona/decision value this hasn't been told about
+  // yet still round-trips instead of being rejected.
+  routingMode?: string
+  decisionSource?: string
 }
 
 /** The API's value for "no user / no organization recorded". */
@@ -43,6 +48,9 @@ export interface LlmUsageRow {
   passCount: number | null
   // Null when the model has no verified price: unknown, not free.
   estimatedCostUsd: number | null
+  // Null for a row from before CW-9 shipped, or from a provider other than chat-wonder.
+  routingMode: string | null
+  decisionSource: string | null
   organizationId: string | null
   organizationName: string | null
   userId: string | null
