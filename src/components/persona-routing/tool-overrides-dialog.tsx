@@ -90,10 +90,10 @@ export function ToolOverridesDialog({ override }: { override: PersonaRoutingOver
                 Tool
               </Label>
               <Select items={availableTools.map((t) => ({ value: t, label: t }))} value={tool} onValueChange={(v) => setTool(v ?? "")}>
-                <SelectTrigger id="override-tool">
+                <SelectTrigger id="override-tool" className="w-full">
                   <SelectValue placeholder="Select a tool..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="w-max min-w-(--anchor-width) max-w-sm">
                   {availableTools.map((t) => (
                     <SelectItem key={t} value={t}>
                       {t}
@@ -107,10 +107,10 @@ export function ToolOverridesDialog({ override }: { override: PersonaRoutingOver
                 Model
               </Label>
               <Select items={KNOWN_MODELS.map((m) => ({ value: m, label: m }))} value={model} onValueChange={(v) => setModel(v ?? "")}>
-                <SelectTrigger id="override-model">
+                <SelectTrigger id="override-model" className="w-full">
                   <SelectValue placeholder="Select a model..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="w-max min-w-(--anchor-width) max-w-sm">
                   {KNOWN_MODELS.map((m) => (
                     <SelectItem key={m} value={m}>
                       {m}
