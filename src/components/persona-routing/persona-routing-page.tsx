@@ -5,11 +5,11 @@ import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { AddOverrideDialog, KNOWN_MODELS } from "@/components/persona-routing/add-override-dialog"
+import { ToolOverridesDialog } from "@/components/persona-routing/tool-overrides-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { type PersonaRoutingOverride, usePersonaRoutingOverridesQuery, useUpdatePersonaRoutingOverrideMutation } from "@/lib/persona-routing/queries"
 
 function formatDateTime(iso: string): string {
@@ -73,20 +73,7 @@ function OverrideRow({ override }: { override: PersonaRoutingOverride }) {
         </Select>
       </TableCell>
       <TableCell>
-        {override.toolOverrides && Object.keys(override.toolOverrides).length > 0 ? (
-          <Tooltip>
-            <TooltipTrigger render={<span className="cursor-help underline decoration-dotted" />}>
-              {Object.keys(override.toolOverrides).length} tool{Object.keys(override.toolOverrides).length === 1 ? "" : "s"}
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs whitespace-normal">
-              {Object.entries(override.toolOverrides)
-                .map(([tool, model]) => `${tool} → ${model}`)
-                .join(", ")}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <span className="text-muted-foreground">none</span>
-        )}
+        <ToolOverridesDialog override={override} />
       </TableCell>
       <TableCell className="text-muted-foreground text-sm">{formatDateTime(override.updatedAt)}</TableCell>
       <TableCell>{update.isPending && <Loader2 className="size-3.5 animate-spin" />}</TableCell>

@@ -16,6 +16,38 @@ import { type RoutingMode, useUpdatePersonaRoutingOverrideMutation } from "@/lib
  * routing overrides entirely -- listing them here would let an admin "set" something inert. */
 const KNOWN_PERSONAS = ["legal", "legal_uk", "legal_kr", "intake", "intake_kr"] as const
 
+/** Each persona's real tool whitelist, from process_persona's own *_whitelist lists in
+ * the_server.py. Scopes the tool-override dropdown so an admin can't pin a model to a tool
+ * that persona never actually calls -- the pin would just never fire. */
+export const PERSONA_TOOLS: Record<(typeof KNOWN_PERSONAS)[number], string[]> = {
+  legal_uk: [
+    "case_law_search", "judgment_get_header", "judgment_get_index", "judgment_get_paragraph",
+    "case_law_grep_judgment", "legislation_search", "legislation_get_toc", "legislation_get_section",
+    "get_legal_recommendation_uk", "citations_parse", "citations_resolve", "citations_network",
+    "citations_format_oscola", "analyze_document_uk", "parliament_search_hansard",
+    "parliament_policy_position_summary", "parliament_find_member", "parliament_member_debates",
+    "parliament_member_interests", "parliament_search_petitions", "parliament_get_debate_divisions",
+    "parliament_get_debate_contributions", "parliament_lookup_by_column", "bills_search_bills",
+    "bills_get_bill", "votes_search_divisions", "votes_get_division", "committees_search_committees",
+    "committees_get_committee", "committees_search_evidence", "hmrc_get_vat_rate",
+    "hmrc_check_mtd_status", "hmrc_search_guidance", "uk_legal_mcp_list_prompts",
+    "uk_legal_mcp_get_prompt", "uk_legal_mcp_list_resources", "uk_legal_mcp_read_resource",
+    "get_case_document", "generate_legal_document_uk", "draft_pleading_uk",
+  ],
+  legal: [
+    "search_jurisprudence", "search_republic_acts", "get_case", "get_republic_act",
+    "get_case_document", "get_legal_recommendation", "analyze_document", "generate_legal_document",
+    "draft_pleading",
+  ],
+  legal_kr: [
+    "search_law", "get_law_text", "get_annexes", "ordinance_radar", "legal_research",
+    "legal_analysis", "search_decisions", "get_decision_text", "discover_tools_kr",
+    "execute_tool_kr", "get_case_document",
+  ],
+  intake: ["case_law_search", "judgment_get_header", "legislation_search", "legislation_get_section", "find_lawyer", "mark_case_ready", "create_case"],
+  intake_kr: ["search_law", "get_law_text", "search_decisions", "get_decision_text", "mark_case_ready", "create_case"],
+}
+
 /** Models model_registry.py knows about and the_server.py can actually call. run_function_chain
  * (the real completion path _model flows into) calls model_registry.get_client/shape_chat_args
  * for every model, including deepseek-chat/deepseek-reasoner -- that dispatch is real: a real
