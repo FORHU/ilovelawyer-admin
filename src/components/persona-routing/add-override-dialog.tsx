@@ -6,13 +6,54 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { type RoutingMode, useUpdatePersonaRoutingOverrideMutation } from "@/lib/persona-routing/queries"
 
-/** Adds a new override row. The persona name is free text -- this API only stores overrides,
- * chat-wonder-v2-api owns the actual persona list, so there is nothing here to validate it against. */
+/** Personas chat-wonder-v2-api's model_router.py actually calls decide_turn_model for
+ * (the_server.py's _legal_model_override/_intake_model_override call sites). Every other
+ * persona (stylist, garment, maps, cosmetics, nav, tailor) runs on CHAT_MODEL and ignores
+ * routing overrides entirely -- listing them here would let an admin "set" something inert. */
+const KNOWN_PERSONAS = ["legal", "legal_uk", "legal_kr", "intake", "intake_kr"] as const
+
+/** Each persona's real tool whitelist, from process_persona's own *_whitelist lists in
+ * the_server.py. Scopes the tool-override dropdown so an admin can't pin a model to a tool
+ * that persona never actually calls -- the pin would just never fire. */
+export const PERSONA_TOOLS: Record<(typeof KNOWN_PERSONAS)[number], string[]> = {
+  legal_uk: [
+    "case_law_search", "judgment_get_header", "judgment_get_index", "judgment_get_paragraph",
+    "case_law_grep_judgment", "legislation_search", "legislation_get_toc", "legislation_get_section",
+    "get_legal_recommendation_uk", "citations_parse", "citations_resolve", "citations_network",
+    "citations_format_oscola", "analyze_document_uk", "parliament_search_hansard",
+    "parliament_policy_position_summary", "parliament_find_member", "parliament_member_debates",
+    "parliament_member_interests", "parliament_search_petitions", "parliament_get_debate_divisions",
+    "parliament_get_debate_contributions", "parliament_lookup_by_column", "bills_search_bills",
+    "bills_get_bill", "votes_search_divisions", "votes_get_division", "committees_search_committees",
+    "committees_get_committee", "committees_search_evidence", "hmrc_get_vat_rate",
+    "hmrc_check_mtd_status", "hmrc_search_guidance", "uk_legal_mcp_list_prompts",
+    "uk_legal_mcp_get_prompt", "uk_legal_mcp_list_resources", "uk_legal_mcp_read_resource",
+    "get_case_document", "generate_legal_document_uk", "draft_pleading_uk",
+  ],
+  legal: [
+    "search_jurisprudence", "search_republic_acts", "get_case", "get_republic_act",
+    "get_case_document", "get_legal_recommendation", "analyze_document", "generate_legal_document",
+    "draft_pleading",
+  ],
+  legal_kr: [
+    "search_law", "get_law_text", "get_annexes", "ordinance_radar", "legal_research",
+    "legal_analysis", "search_decisions", "get_decision_text", "discover_tools_kr",
+    "execute_tool_kr", "get_case_document",
+  ],
+  intake: ["case_law_search", "judgment_get_header", "legislation_search", "legislation_get_section", "find_lawyer", "mark_case_ready", "create_case"],
+  intake_kr: ["search_law", "get_law_text", "search_decisions", "get_decision_text", "mark_case_ready", "create_case"],
+}
+
+/** Models model_registry.py knows about and the_server.py can actually call. run_function_chain
+ * (the real completion path _model flows into) calls model_registry.get_client/shape_chat_args
+ * for every model, including deepseek-chat/deepseek-reasoner -- that dispatch is real: a real
+ * DeepSeek client, real base URL, real thinking-mode/reasoning_effort handling. */
+export const KNOWN_MODELS = ["gpt-5.6-luna", "gpt-6-luna", "gpt-5.6-terra", "deepseek-chat", "deepseek-reasoner"] as const
+
 export function AddOverrideDialog({ existing }: { existing: string[] }) {
   const [open, setOpen] = useState(false)
   const [persona, setPersona] = useState("")
@@ -20,6 +61,7 @@ export function AddOverrideDialog({ existing }: { existing: string[] }) {
   const [pinnedModel, setPinnedModel] = useState("")
   const update = useUpdatePersonaRoutingOverrideMutation()
 
+  const availablePersonas = KNOWN_PERSONAS.filter((p) => !existing.includes(p))
   const personaError = persona.trim() === "" ? null : existing.includes(persona.trim()) ? "Already has an override — edit it in the table instead." : null
   const pinError = routingMode === "MANUAL" && pinnedModel.trim() === "" ? "Required for MANUAL." : null
   const canSave = persona.trim() !== "" && !personaError && !pinError
@@ -67,9 +109,24 @@ export function AddOverrideDialog({ existing }: { existing: string[] }) {
         </DialogHeader>
         <div className="flex flex-col gap-2">
           <Label htmlFor="persona-name" className="font-normal select-text">
-            Persona name — as chat-wonder-v2-api knows it (e.g. legal_uk, stylist, intake)
+            Persona
           </Label>
-          <Input id="persona-name" value={persona} onChange={(e) => setPersona(e.target.value)} aria-invalid={!!personaError} />
+          <Select
+            items={availablePersonas.map((p) => ({ value: p, label: p }))}
+            value={persona}
+            onValueChange={(v) => setPersona(v ?? "")}
+          >
+            <SelectTrigger id="persona-name" aria-invalid={!!personaError}>
+              <SelectValue placeholder="Select a persona..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availablePersonas.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {personaError && <p className="text-destructive text-xs">{personaError}</p>}
         </div>
         <div className="flex flex-col gap-2">
@@ -96,7 +153,18 @@ export function AddOverrideDialog({ existing }: { existing: string[] }) {
             <Label htmlFor="pinned-model" className="font-normal select-text">
               Pinned model
             </Label>
-            <Input id="pinned-model" placeholder="gpt-6-luna" value={pinnedModel} onChange={(e) => setPinnedModel(e.target.value)} aria-invalid={!!pinError} />
+            <Select items={KNOWN_MODELS.map((m) => ({ value: m, label: m }))} value={pinnedModel} onValueChange={(v) => setPinnedModel(v ?? "")}>
+              <SelectTrigger id="pinned-model" aria-invalid={!!pinError}>
+                <SelectValue placeholder="Select a model..." />
+              </SelectTrigger>
+              <SelectContent>
+                {KNOWN_MODELS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {pinError && <p className="text-destructive text-xs">{pinError}</p>}
           </div>
         )}

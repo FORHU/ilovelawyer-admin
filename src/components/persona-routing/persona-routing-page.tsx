@@ -4,12 +4,12 @@ import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { AddOverrideDialog } from "@/components/persona-routing/add-override-dialog"
+import { AddOverrideDialog, KNOWN_MODELS } from "@/components/persona-routing/add-override-dialog"
+import { ToolOverridesDialog } from "@/components/persona-routing/tool-overrides-dialog"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { type PersonaRoutingOverride, usePersonaRoutingOverridesQuery, useUpdatePersonaRoutingOverrideMutation } from "@/lib/persona-routing/queries"
 
 function formatDateTime(iso: string): string {
@@ -40,16 +40,11 @@ function OverrideRow({ override }: { override: PersonaRoutingOverride }) {
     )
   }
 
-  function savePin() {
-    const trimmed = pinnedDraft.trim()
-    if (trimmed === (override.manualPinnedModel ?? "")) return
-    if (isManual && trimmed === "") {
-      toast.error("MANUAL needs a pinned model — reverting.")
-      setPinnedDraft(override.manualPinnedModel ?? "")
-      return
-    }
+  function savePin(next: string) {
+    setPinnedDraft(next)
+    if (next === (override.manualPinnedModel ?? "")) return
     update.mutate(
-      { persona: override.persona, fields: { routingMode: override.routingMode, manualPinnedModel: trimmed || null } },
+      { persona: override.persona, fields: { routingMode: override.routingMode, manualPinnedModel: next || null } },
       { onSuccess: () => toast.success(`${override.persona}'s pinned model updated`), onError: (err) => toast.error((err as Error).message) }
     )
   }
@@ -64,30 +59,21 @@ function OverrideRow({ override }: { override: PersonaRoutingOverride }) {
         </div>
       </TableCell>
       <TableCell>
-        <Input
-          value={pinnedDraft}
-          onChange={(e) => setPinnedDraft(e.target.value)}
-          onBlur={savePin}
-          placeholder={isManual ? "required" : "unused while AUTO"}
-          className="h-8 w-48"
-          disabled={update.isPending}
-        />
+        <Select items={KNOWN_MODELS.map((m) => ({ value: m, label: m }))} value={pinnedDraft} onValueChange={(v) => savePin(v ?? "")}>
+          <SelectTrigger className="h-8 w-48" disabled={update.isPending}>
+            <SelectValue placeholder={isManual ? "required" : "unused while AUTO"} />
+          </SelectTrigger>
+          <SelectContent>
+            {KNOWN_MODELS.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </TableCell>
       <TableCell>
-        {override.toolOverrides && Object.keys(override.toolOverrides).length > 0 ? (
-          <Tooltip>
-            <TooltipTrigger render={<span className="cursor-help underline decoration-dotted" />}>
-              {Object.keys(override.toolOverrides).length} tool{Object.keys(override.toolOverrides).length === 1 ? "" : "s"}
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs whitespace-normal">
-              {Object.entries(override.toolOverrides)
-                .map(([tool, model]) => `${tool} → ${model}`)
-                .join(", ")}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <span className="text-muted-foreground">none</span>
-        )}
+        <ToolOverridesDialog override={override} />
       </TableCell>
       <TableCell className="text-muted-foreground text-sm">{formatDateTime(override.updatedAt)}</TableCell>
       <TableCell>{update.isPending && <Loader2 className="size-3.5 animate-spin" />}</TableCell>
