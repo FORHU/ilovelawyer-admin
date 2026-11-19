@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { KNOWN_MODELS, PERSONA_TOOLS } from "@/components/persona-routing/add-override-dialog"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { type PersonaRoutingOverride, useUpdatePersonaRoutingOverrideMutation } from "@/lib/persona-routing/queries"
 
@@ -65,25 +66,32 @@ export function ToolOverridesDialog({ override }: { override: PersonaRoutingOver
 
         {toolCount > 0 && (
           <div className="flex flex-col gap-2">
-            {Object.entries(current).map(([toolName, pinnedModel]) => (
-              <div key={toolName} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
-                <span>
-                  <span className="font-medium">{toolName}</span> → {pinnedModel}
-                </span>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeOverride(toolName)} disabled={update.isPending}>
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
-            ))}
+            <Label className="font-normal select-text">Current overrides</Label>
+            <div className="flex flex-col gap-2">
+              {Object.entries(current).map(([toolName, pinnedModel]) => (
+                <div key={toolName} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-medium">{toolName}</span> → {pinnedModel}
+                  </span>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeOverride(toolName)} disabled={update.isPending}>
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
         {availableTools.length > 0 ? (
-          <div className="flex items-end gap-2">
-            <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex flex-col gap-4 border-t pt-4">
+            <Label className="font-normal select-text">Add an override</Label>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="override-tool" className="text-muted-foreground text-xs font-normal select-text">
+                Tool
+              </Label>
               <Select items={availableTools.map((t) => ({ value: t, label: t }))} value={tool} onValueChange={(v) => setTool(v ?? "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Tool..." />
+                <SelectTrigger id="override-tool">
+                  <SelectValue placeholder="Select a tool..." />
                 </SelectTrigger>
                 <SelectContent>
                   {availableTools.map((t) => (
@@ -94,10 +102,13 @@ export function ToolOverridesDialog({ override }: { override: PersonaRoutingOver
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex flex-1 flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="override-model" className="text-muted-foreground text-xs font-normal select-text">
+                Model
+              </Label>
               <Select items={KNOWN_MODELS.map((m) => ({ value: m, label: m }))} value={model} onValueChange={(v) => setModel(v ?? "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Model..." />
+                <SelectTrigger id="override-model">
+                  <SelectValue placeholder="Select a model..." />
                 </SelectTrigger>
                 <SelectContent>
                   {KNOWN_MODELS.map((m) => (
@@ -108,13 +119,13 @@ export function ToolOverridesDialog({ override }: { override: PersonaRoutingOver
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={addOverride} disabled={!canAdd || update.isPending}>
+            <Button onClick={addOverride} disabled={!canAdd || update.isPending} className="self-end">
               {update.isPending && <Loader2 className="size-3.5 animate-spin" />}
-              Add
+              Add override
             </Button>
           </div>
         ) : (
-          <p className="text-muted-foreground text-sm">Every tool {override.persona} calls already has an override.</p>
+          <p className="text-muted-foreground border-t pt-4 text-sm">Every tool {override.persona} calls already has an override.</p>
         )}
 
         <DialogFooter>
