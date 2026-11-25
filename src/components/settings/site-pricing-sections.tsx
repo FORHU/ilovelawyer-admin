@@ -148,18 +148,19 @@ function LawyerPricingSection({ site }: { site: LawyerSite }) {
   )
 }
 
-/** Sites where client requests aren't open yet, so their quote payments and lawyer fees (in pounds,
- * like every quote) can't be charged: hidden there rather than shown at prices that don't apply. */
-const CLIENT_REQUESTS_NOT_OPEN: readonly LawyerSite[] = ["KR"]
+/** Sites where the client pays the hired lawyer directly (ilovelawyer-api#695, #694): nothing is paid
+ * through ilovelawyer, so there's no platform fee, payout hold or introduction fee to set. The
+ * engaged-case AI packs stay hidden too: the API prices them in pounds on every site. */
+const PAYS_LAWYER_DIRECTLY: readonly LawyerSite[] = ["KR"]
 
 /** Every price and fee on one site, in the order a lawyer then a client meets them. */
 export function SitePricingSections({ site }: { site: LawyerSite }) {
-  const clientRequestsOpen = !CLIENT_REQUESTS_NOT_OPEN.includes(site)
+  const paysLawyerDirectly = PAYS_LAWYER_DIRECTLY.includes(site)
   return (
     <div className="flex flex-col gap-8">
       <LawyerPlansSections site={site} />
       <ClientPricingSection site={site} />
-      {clientRequestsOpen ? (
+      {!paysLawyerDirectly ? (
         <>
           <PayoutSettingsSection site={site} />
           <LawyerPricingSection site={site} />
@@ -167,7 +168,7 @@ export function SitePricingSections({ site }: { site: LawyerSite }) {
       ) : (
         <Section
           title="Quote payments and lawyer fees"
-          description="These apply to client requests, which aren't open on this site yet. They'll appear here, in this site's currency, when client requests open."
+          description="Clients on this site pay lawyers directly. ilovelawyer takes no platform fee and pays nothing out, so there are no quote-payment, payout or introduction-fee settings."
         >
           {null}
         </Section>
